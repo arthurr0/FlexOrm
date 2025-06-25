@@ -1,24 +1,20 @@
-package pl.minecodes.plots.plugin.database.connection;
+package pl.minecodes.orm.connection;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import pl.minecodes.plots.plugin.configuration.section.DatabaseConfiguration;
-import pl.minecodes.plots.plugin.database.DatabaseObjectType;
 
-public class MySQLDatabaseConnection implements DatabaseConnection<HikariDataSource> {
+public class MySQLConnection implements Connection<HikariDataSource> {
 
   private HikariDataSource hikariDataSource;
 
-  private final DatabaseConfiguration databaseConfiguration;
+  private final ConnectionCredentials connectionCredentials;
 
-  public MySQLDatabaseConnection(
-      DatabaseConfiguration databaseConfiguration
-  ) {
-    this.databaseConfiguration = databaseConfiguration;
+  public MySQLConnection(ConnectionCredentials connectionCredentials) {
+    this.connectionCredentials = connectionCredentials;
   }
 
   @Override
-  public void connect(DatabaseObjectType databaseObjectType) {
+  public void connect() {
     if (this.hikariDataSource != null) {
       return;
     }
@@ -39,9 +35,9 @@ public class MySQLDatabaseConnection implements DatabaseConnection<HikariDataSou
     HikariConfig hikariConfig = new HikariConfig();
     hikariConfig.setDriverClassName("com.mysql.cj.jdbc.Driver");
 
-    hikariConfig.setJdbcUrl("jdbc:mysql://" + this.databaseConfiguration.hostname + ":" + this.databaseConfiguration.port + "/" + this.databaseConfiguration.base);
-    hikariConfig.setUsername(this.databaseConfiguration.username);
-    hikariConfig.setPassword(this.databaseConfiguration.password);
+    hikariConfig.setJdbcUrl("jdbc:mysql://" + this.connectionCredentials.hostname() + ":" + this.connectionCredentials.port() + "/" + this.connectionCredentials.database());
+    hikariConfig.setUsername(this.connectionCredentials.username());
+    hikariConfig.setPassword(this.connectionCredentials.password());
 
     hikariConfig.addDataSourceProperty("cachePrepStmts", "true");
     hikariConfig.addDataSourceProperty("prepStmtCacheSize", "250");

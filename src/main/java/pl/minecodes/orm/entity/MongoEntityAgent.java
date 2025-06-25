@@ -7,17 +7,27 @@ import com.mongodb.client.MongoDatabase;
 import org.bson.Document;
 import pl.minecodes.orm.FlexOrm;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import pl.minecodes.orm.table.TableMetadata;
 
-public class MongoEntityManager<T, ID> extends BaseEntityManager<T, ID> {
+public class MongoEntityAgent<T, ID> extends BaseEntityAgent<T, ID> {
 
   private ClientSession activeSession;
 
-  public MongoEntityManager(FlexOrm orm, Class<T> entityClass) {
+  public MongoEntityAgent(FlexOrm orm, Class<T> entityClass) {
     super(orm, entityClass);
+  }
+
+  @Override
+  protected Object executeRawQueryInternal(String rawQuery) {
+    MongoDatabase database = (MongoDatabase) orm.getConnection().getConnection();
+    TableMetadata metadata = getTableMetadata(entityClass);
+
+    Document queryDocument = Document.parse(rawQuery);
+
+    return database.getCollection(metadata.tableName()).find(queryDocument);
   }
 
   @Override

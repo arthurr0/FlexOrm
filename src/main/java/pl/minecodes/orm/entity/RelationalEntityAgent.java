@@ -1,6 +1,7 @@
 package pl.minecodes.orm.entity;
 
 import com.zaxxer.hikari.HikariDataSource;
+import java.lang.reflect.Field;
 import pl.minecodes.orm.FlexOrm;
 
 import java.sql.Connection;
@@ -10,13 +11,33 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import pl.minecodes.orm.table.TableMetadata;
 
-public abstract class RelationalEntityManager<T, ID> extends BaseEntityManager<T, ID> {
+public abstract class RelationalEntityAgent<T, ID> extends BaseEntityAgent<T, ID> {
 
   protected Connection activeConnection;
 
-  protected RelationalEntityManager(FlexOrm orm, Class<T> entityClass) {
+  protected RelationalEntityAgent(FlexOrm orm, Class<T> entityClass) {
     super(orm, entityClass);
+  }
+
+  @Override
+  protected Object executeRawQueryInternal(String rawQuery) {
+    try {
+      Connection connection = getConnection();
+      boolean autoClose = activeConnection == null;
+
+      try {
+        PreparedStatement statement = connection.prepareStatement(rawQuery);
+        return statement.executeQuery();
+      } finally {
+        if (autoClose) {
+          connection.close();
+        }
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("Error executing raw query", e);
+    }
   }
 
   @Override
@@ -269,9 +290,33 @@ public abstract class RelationalEntityManager<T, ID> extends BaseEntityManager<T
               T instance = entityClass.getDeclaredConstructor().newInstance();
 
               for (var entry : metadata.columnFields().entrySet()) {
-                Object value = resultSet.getObject(entry.getKey());
-                if (value != null) {
-                  entry.getValue().set(instance, value);
+                String columnName = entry.getKey();
+                Field field = entry.getValue();
+
+                try {
+                  Object value = resultSet.getObject(columnName);
+
+                  if (value != null) {
+                    // Konwersja dla pól typu boolean
+                    if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+                      if (value instanceof Integer) {
+                        boolean boolValue = ((Integer) value) != 0;
+                        field.set(instance, boolValue);
+                      } else if (value instanceof Long) {
+                        boolean boolValue = ((Long) value) != 0L;
+                        field.set(instance, boolValue);
+                      } else if (value instanceof String) {
+                        boolean boolValue = "true".equalsIgnoreCase((String) value) || "1".equals(value);
+                        field.set(instance, boolValue);
+                      } else {
+                        field.set(instance, value);
+                      }
+                    } else {
+                      field.set(instance, value);
+                    }
+                  }
+                } catch (SQLException e) {
+                  System.err.println("Warning: Problem accessing column: " + e.getMessage());
                 }
               }
 
@@ -308,9 +353,33 @@ public abstract class RelationalEntityManager<T, ID> extends BaseEntityManager<T
             T instance = entityClass.getDeclaredConstructor().newInstance();
 
             for (var entry : metadata.columnFields().entrySet()) {
-              Object value = resultSet.getObject(entry.getKey());
-              if (value != null) {
-                entry.getValue().set(instance, value);
+              try {
+                String columnName = entry.getKey();
+                Field field = entry.getValue();
+
+                Object value = resultSet.getObject(columnName);
+
+                if (value != null) {
+                  // Konwersja dla pól typu boolean
+                  if (field.getType() == boolean.class || field.getType() == Boolean.class) {
+                    if (value instanceof Integer) {
+                      boolean boolValue = ((Integer) value) != 0;
+                      field.set(instance, boolValue);
+                    } else if (value instanceof Long) {
+                      boolean boolValue = ((Long) value) != 0L;
+                      field.set(instance, boolValue);
+                    } else if (value instanceof String) {
+                      boolean boolValue = "true".equalsIgnoreCase((String) value) || "1".equals(value);
+                      field.set(instance, boolValue);
+                    } else {
+                      field.set(instance, value);
+                    }
+                  } else {
+                    field.set(instance, value);
+                  }
+                }
+              } catch (SQLException e) {
+                System.err.println("Warning: Problem accessing column: " + e.getMessage());
               }
             }
 

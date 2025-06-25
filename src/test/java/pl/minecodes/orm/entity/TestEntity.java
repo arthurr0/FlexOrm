@@ -4,7 +4,7 @@ import pl.minecodes.orm.annotation.OrmEntity;
 import pl.minecodes.orm.annotation.OrmEntityId;
 import pl.minecodes.orm.annotation.OrmField;
 
-@OrmEntity
+@OrmEntity(table = "testentity")
 public class TestEntity {
 
   @OrmEntityId

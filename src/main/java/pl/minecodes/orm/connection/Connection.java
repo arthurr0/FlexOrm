@@ -1,6 +1,6 @@
 package pl.minecodes.orm.connection;
 
-public interface DatabaseConnection<T> {
+public interface Connection<T> {
 
   void connect();
 

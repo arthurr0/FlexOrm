@@ -8,13 +8,13 @@ import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoDatabase;
 import java.util.List;
 
-public class MongoDatabaseConnection implements DatabaseConnection<MongoDatabase> {
-
-  private MongoDatabase mongoDatabase;
+public class MongoConnection implements Connection<MongoDatabase> {
 
   private final ConnectionCredentials connectionCredentials;
 
-  public MongoDatabaseConnection(ConnectionCredentials connectionCredentials) {
+  private MongoDatabase mongoDatabase;
+
+  public MongoConnection(ConnectionCredentials connectionCredentials) {
     this.connectionCredentials = connectionCredentials;
   }
 
@@ -24,21 +24,24 @@ public class MongoDatabaseConnection implements DatabaseConnection<MongoDatabase
       return;
     }
 
-    MongoCredential credential = MongoCredential.createCredential(
-        this.connectionCredentials.username(),
-        this.connectionCredentials.database(),
-        this.connectionCredentials.password().toCharArray()
-    );
-
-    MongoClientSettings settings = MongoClientSettings.builder()
-        .credential(credential)
+    MongoClientSettings.Builder settingsBuilder = MongoClientSettings.builder()
         .applyToClusterSettings(builder ->
-            builder.hosts(List.of(new ServerAddress(this.connectionCredentials.hostname(), this.connectionCredentials.port()))))
-        .build();
+            builder.hosts(List.of(new ServerAddress(
+                this.connectionCredentials.hostname(),
+                this.connectionCredentials.port()
+            )))
+        );
 
+    if (this.connectionCredentials.username() != null && this.connectionCredentials.password() != null) {
+      MongoCredential credential = MongoCredential.createCredential(
+          this.connectionCredentials.username(),
+          this.connectionCredentials.database(),
+          this.connectionCredentials.password().toCharArray()
+      );
+      settingsBuilder.credential(credential);
+    }
 
-    MongoClient mongoClient = MongoClients.create(settings);
-
+    MongoClient mongoClient = MongoClients.create(settingsBuilder.build());
     this.mongoDatabase = mongoClient.getDatabase(this.connectionCredentials.database());
   }
 

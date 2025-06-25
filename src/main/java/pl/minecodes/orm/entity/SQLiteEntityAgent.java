@@ -2,9 +2,9 @@ package pl.minecodes.orm.entity;
 
 import pl.minecodes.orm.FlexOrm;
 
-public class SQLiteEntityManager<T, ID> extends RelationalEntityManager<T, ID> {
+public class SQLiteEntityAgent<T, ID> extends RelationalEntityAgent<T, ID> {
 
-  public SQLiteEntityManager(FlexOrm orm, Class<T> entityClass) {
+  public SQLiteEntityAgent(FlexOrm orm, Class<T> entityClass) {
     super(orm, entityClass);
   }
 
