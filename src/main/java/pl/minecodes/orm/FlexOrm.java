@@ -7,8 +7,8 @@ import pl.minecodes.orm.connection.ConnectionCredentials;
 import pl.minecodes.orm.connection.MongoConnection;
 import pl.minecodes.orm.connection.MySQLConnection;
 import pl.minecodes.orm.connection.SQLiteConnection;
-import pl.minecodes.orm.entity.EntityAgent;
-import pl.minecodes.orm.entity.EntityAgentFactory;
+import pl.minecodes.orm.entity.EntityRepository;
+import pl.minecodes.orm.entity.EntityRepositoryFactory;
 
 public class FlexOrm {
 
@@ -84,27 +84,6 @@ public class FlexOrm {
     );
   }
 
-  public static FlexOrm json(
-      String hostname,
-      int port,
-      String database,
-      String username,
-      String password,
-      File databaseDirectory,
-      Gson gson
-  ) {
-    return new FlexOrm(
-        DatabaseType.JSON,
-        hostname,
-        port,
-        database,
-        username,
-        password,
-        gson,
-        databaseDirectory
-    );
-  }
-
   public static FlexOrm sqllite(File databaseFile) {
     return new FlexOrm(
         DatabaseType.SQLLITE,
@@ -137,7 +116,6 @@ public class FlexOrm {
       case MYSQL -> new MySQLConnection(connectionCredentials);
       case MONGODB -> new MongoConnection(connectionCredentials);
       case SQLLITE -> new SQLiteConnection(connectionCredentials);
-      case JSON -> throw new IllegalStateException("JSON connection is not supported");
     };
 
     this.connection.connect();
@@ -145,12 +123,12 @@ public class FlexOrm {
     return this;
   }
 
-  public <T, ID> EntityAgent<T, ID> getEntityAgent(Class<T> entityClass) {
+  public <T, ID> EntityRepository<T, ID> getEntityRepository(Class<T> entityClass) {
     if (this.connection == null) {
       connect();
     }
 
-    return EntityAgentFactory.createEntityAgent(this, entityClass);
+    return EntityRepositoryFactory.createEntityRepository(this, entityClass);
   }
 
   public DatabaseType getDatabaseType() {

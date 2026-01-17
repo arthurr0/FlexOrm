@@ -22,7 +22,7 @@ import org.bson.conversions.Bson;
 
 import pl.minecodes.orm.DatabaseType;
 import pl.minecodes.orm.FlexOrm;
-import pl.minecodes.orm.entity.BaseEntityAgent;
+import pl.minecodes.orm.entity.BaseEntityRepository;
 import pl.minecodes.orm.table.TableMetadata;
 
 public class Query<T> {
@@ -121,18 +121,10 @@ public class Query<T> {
   }
 
   public List<T> execute() {
-    switch (orm.getDatabaseType()) {
-      case MYSQL, SQLLITE -> {
-        return executeRelationalQuery();
-      }
-      case MONGODB -> {
-        return executeMongoQuery();
-      }
-      case JSON -> {
-        return executeJsonQuery();
-      }
-      default -> throw new UnsupportedOperationException("Database type not supported");
-    }
+    return switch (orm.getDatabaseType()) {
+      case MYSQL, SQLLITE -> executeRelationalQuery();
+      case MONGODB -> executeMongoQuery();
+    };
   }
 
   private List<T> executeRelationalQuery() {
@@ -145,8 +137,6 @@ public class Query<T> {
         } else {
           sql = buildSqlQuery();
         }
-
-        System.out.println("Executing SQL: " + sql); // DEBUG
 
         try (PreparedStatement statement = prepareStatement(connection, sql)) {
           try (ResultSet resultSet = statement.executeQuery()) {
@@ -169,8 +159,6 @@ public class Query<T> {
     } else {
       filter = buildMongoQuery();
     }
-
-    System.out.println("Executing MongoDB query: " + filter.toString()); // DEBUG
 
     FindIterable<Document> findIterable = collection.find(filter);
 
@@ -198,11 +186,6 @@ public class Query<T> {
     }
 
     return results;
-  }
-
-  private List<T> executeJsonQuery() {
-    // Implementacja JSON podobna do poprzedniej
-    throw new UnsupportedOperationException("Custom queries for JSON storage are not implemented yet");
   }
 
   private String buildSqlQuery() {
@@ -428,27 +411,15 @@ public class Query<T> {
           try {
             Object value = resultSet.getObject(columnName);
 
-            // Konwersja typów dla SQLite, które ma ograniczone typy
             if (value != null) {
-              if (field.getType() == Boolean.class || field.getType() == boolean.class) {
-                if (value instanceof Integer) {
-                  value = ((Integer) value) == 1;
-                } else if (value instanceof Long) {
-                  value = ((Long) value) == 1L;
-                } else if (value instanceof String) {
-                  value = "true".equalsIgnoreCase((String) value) || "1".equals(value);
-                }
-              }
-
+              value = convertValue(value, field.getType());
               field.set(instance, value);
 
-              // Zapisz wartość ID do sprawdzania duplikatów
               if (field.equals(metadata.idField())) {
                 idValue = value;
               }
             }
-          } catch (SQLException e) {
-            System.err.println("Warning: Column '" + columnName + "' not found in result set");
+          } catch (SQLException ignored) {
           }
         }
 
@@ -495,8 +466,7 @@ public class Query<T> {
 
             field.set(instance, value);
           }
-        } catch (Exception e) {
-          System.err.println("Warning: Field '" + columnName + "' not found in document");
+        } catch (Exception ignored) {
         }
       }
 
@@ -530,56 +500,54 @@ public class Query<T> {
 
   // Metoda pomocnicza do wykonywania zapytania count()
   public long count() {
-    switch (orm.getDatabaseType()) {
-      case MYSQL, SQLLITE -> {
-        try {
-          HikariDataSource dataSource = (HikariDataSource) orm.getConnection().getConnection();
-          try (Connection connection = dataSource.getConnection()) {
-            StringBuilder sql = new StringBuilder();
-            sql.append("SELECT COUNT(");
-            if (useDistinct) {
-              sql.append("DISTINCT ");
-            }
-            sql.append("*) FROM ").append(metadata.tableName());
+    return switch (orm.getDatabaseType()) {
+      case MYSQL, SQLLITE -> countRelational();
+      case MONGODB -> countMongo();
+    };
+  }
 
-            if (!conditions.isEmpty()) {
-              sql.append(" WHERE ");
-              buildWhereClause(sql);
-            }
+  private long countRelational() {
+    try {
+      HikariDataSource dataSource = (HikariDataSource) orm.getConnection().getConnection();
+      try (Connection connection = dataSource.getConnection()) {
+        StringBuilder sql = new StringBuilder();
+        sql.append("SELECT COUNT(");
+        if (useDistinct) {
+          sql.append("DISTINCT ");
+        }
+        sql.append("*) FROM ").append(metadata.tableName());
 
-            System.out.println("Executing COUNT SQL: " + sql.toString()); // DEBUG
+        if (!conditions.isEmpty()) {
+          sql.append(" WHERE ");
+          buildWhereClause(sql);
+        }
 
-            try (PreparedStatement statement = prepareStatement(connection, sql.toString())) {
-              try (ResultSet resultSet = statement.executeQuery()) {
-                if (resultSet.next()) {
-                  return resultSet.getLong(1);
-                }
-                return 0;
-              }
+        try (PreparedStatement statement = prepareStatement(connection, sql.toString())) {
+          try (ResultSet resultSet = statement.executeQuery()) {
+            if (resultSet.next()) {
+              return resultSet.getLong(1);
             }
+            return 0;
           }
-        } catch (SQLException e) {
-          throw new RuntimeException("Error executing count query", e);
         }
       }
-      case MONGODB -> {
-        MongoDatabase database = (MongoDatabase) orm.getConnection().getConnection();
-        MongoCollection<Document> collection = database.getCollection(metadata.tableName());
-
-        Bson filter;
-        if (mongoQuery != null) {
-          filter = mongoQuery;
-        } else {
-          filter = buildMongoQuery();
-        }
-
-        return collection.countDocuments(filter);
-      }
-      case JSON -> {
-        throw new UnsupportedOperationException("Count queries for JSON storage are not implemented yet");
-      }
-      default -> throw new UnsupportedOperationException("Database type not supported");
+    } catch (SQLException e) {
+      throw new RuntimeException("Error executing count query", e);
     }
+  }
+
+  private long countMongo() {
+    MongoDatabase database = (MongoDatabase) orm.getConnection().getConnection();
+    MongoCollection<Document> collection = database.getCollection(metadata.tableName());
+
+    Bson filter;
+    if (mongoQuery != null) {
+      filter = mongoQuery;
+    } else {
+      filter = buildMongoQuery();
+    }
+
+    return collection.countDocuments(filter);
   }
 
   // Metoda pomocnicza do wykonywania zapytań na surowym SQL
@@ -612,5 +580,43 @@ public class Query<T> {
     } else {
       throw new UnsupportedOperationException("Raw SQL updates are only supported for relational databases");
     }
+  }
+
+  private Object convertValue(Object value, Class<?> targetType) {
+    if (value == null) {
+      return null;
+    }
+
+    if (targetType == Long.class || targetType == long.class) {
+      if (value instanceof Integer) {
+        return ((Integer) value).longValue();
+      } else if (value instanceof Number) {
+        return ((Number) value).longValue();
+      }
+    } else if (targetType == Integer.class || targetType == int.class) {
+      if (value instanceof Long) {
+        return ((Long) value).intValue();
+      } else if (value instanceof Number) {
+        return ((Number) value).intValue();
+      }
+    } else if (targetType == Double.class || targetType == double.class) {
+      if (value instanceof Number) {
+        return ((Number) value).doubleValue();
+      }
+    } else if (targetType == Float.class || targetType == float.class) {
+      if (value instanceof Number) {
+        return ((Number) value).floatValue();
+      }
+    } else if (targetType == boolean.class || targetType == Boolean.class) {
+      if (value instanceof Integer) {
+        return ((Integer) value) != 0;
+      } else if (value instanceof Long) {
+        return ((Long) value) != 0L;
+      } else if (value instanceof String) {
+        return "true".equalsIgnoreCase((String) value) || "1".equals(value);
+      }
+    }
+
+    return value;
   }
 }

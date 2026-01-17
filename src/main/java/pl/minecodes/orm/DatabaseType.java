@@ -4,7 +4,6 @@ public enum DatabaseType {
 
   MYSQL,
   MONGODB,
-  SQLLITE,
-  JSON
+  SQLLITE
 
 }

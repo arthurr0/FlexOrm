@@ -1,13 +1,23 @@
 package pl.minecodes.orm.entity;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import pl.minecodes.orm.FlexOrm;
+import pl.minecodes.orm.annotation.FetchType;
 import pl.minecodes.orm.annotation.OrmEntity;
 import pl.minecodes.orm.annotation.OrmEntityId;
 import pl.minecodes.orm.annotation.OrmField;
+import pl.minecodes.orm.annotation.OrmManyToMany;
+import pl.minecodes.orm.annotation.OrmManyToOne;
+import pl.minecodes.orm.annotation.OrmOneToMany;
+import pl.minecodes.orm.annotation.OrmOneToOne;
+import pl.minecodes.orm.annotation.OrmTransient;
 import pl.minecodes.orm.exception.ObjectIsNullException;
 import pl.minecodes.orm.exception.ObjectRequiredAnnotationsException;
+import pl.minecodes.orm.relation.RelationInfo;
+import pl.minecodes.orm.relation.RelationType;
+import pl.minecodes.orm.validation.EntityValidator;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -16,21 +26,20 @@ import pl.minecodes.orm.query.Operator;
 import pl.minecodes.orm.query.Query;
 import pl.minecodes.orm.table.TableMetadata;
 
-public abstract class BaseEntityAgent<T, ID> implements EntityAgent<T, ID> {
+public abstract class BaseEntityRepository<T, ID> implements EntityRepository<T, ID> {
 
   protected final Class<T> entityClass;
   protected final FlexOrm orm;
   protected final Map<Class<?>, TableMetadata> metadataCache = new HashMap<>();
   protected boolean inTransaction = false;
 
-  protected BaseEntityAgent(FlexOrm orm, Class<T> entityClass) {
+  protected BaseEntityRepository(FlexOrm orm, Class<T> entityClass) {
     this.orm = orm;
     this.entityClass = entityClass;
   }
 
   @Override
   public void save(T entity) {
-    System.out.println("test");
     validateEntity(entity);
 
     TableMetadata metadata = getTableMetadata(entityClass);
@@ -46,7 +55,6 @@ public abstract class BaseEntityAgent<T, ID> implements EntityAgent<T, ID> {
     } else {
       insert(entity);
     }
-    System.out.println("s");
   }
 
   @Override
@@ -126,6 +134,7 @@ public abstract class BaseEntityAgent<T, ID> implements EntityAgent<T, ID> {
     }
 
     validateClass(entityClass);
+    EntityValidator.validate(entity);
   }
 
   protected void validateClass(Class<?> objectClass) {
@@ -149,12 +158,30 @@ public abstract class BaseEntityAgent<T, ID> implements EntityAgent<T, ID> {
     Field idField = null;
     Map<String, Field> columnFields = new HashMap<>();
     Map<String, String> fieldColumnNames = new HashMap<>();
+    List<RelationInfo> relations = new ArrayList<>();
 
     for (Field field : objectClass.getDeclaredFields()) {
       field.setAccessible(true);
 
+      if (field.isAnnotationPresent(OrmTransient.class)) {
+        continue;
+      }
+
       if (field.isAnnotationPresent(OrmEntityId.class)) {
         idField = field;
+      }
+
+      RelationInfo relationInfo = extractRelationInfo(field);
+      if (relationInfo != null) {
+        relations.add(relationInfo);
+        if (relationInfo.type() == RelationType.MANY_TO_ONE ||
+            (relationInfo.type() == RelationType.ONE_TO_ONE && relationInfo.isOwning())) {
+          String fkColumn = relationInfo.joinColumn().isEmpty()
+              ? field.getName() + "_id"
+              : relationInfo.joinColumn();
+          fieldColumnNames.put(field.getName(), fkColumn);
+        }
+        continue;
       }
 
       if (field.isAnnotationPresent(OrmField.class)) {
@@ -172,7 +199,71 @@ public abstract class BaseEntityAgent<T, ID> implements EntityAgent<T, ID> {
       throw new ObjectRequiredAnnotationsException("Class " + objectClass.getName() + " does not have a field annotated with @OrmEntityId");
     }
 
-    return new TableMetadata(tableName, idField, columnFields, fieldColumnNames);
+    return new TableMetadata(tableName, idField, columnFields, fieldColumnNames, relations);
+  }
+
+  private RelationInfo extractRelationInfo(Field field) {
+    if (field.isAnnotationPresent(OrmOneToOne.class)) {
+      OrmOneToOne ann = field.getAnnotation(OrmOneToOne.class);
+      return new RelationInfo(
+          field,
+          RelationType.ONE_TO_ONE,
+          ann.targetEntity(),
+          ann.joinColumn(),
+          ann.mappedBy(),
+          "",
+          "",
+          ann.fetch(),
+          ann.cascade()
+      );
+    }
+
+    if (field.isAnnotationPresent(OrmOneToMany.class)) {
+      OrmOneToMany ann = field.getAnnotation(OrmOneToMany.class);
+      return new RelationInfo(
+          field,
+          RelationType.ONE_TO_MANY,
+          ann.targetEntity(),
+          "",
+          ann.mappedBy(),
+          "",
+          "",
+          ann.fetch(),
+          ann.cascade()
+      );
+    }
+
+    if (field.isAnnotationPresent(OrmManyToOne.class)) {
+      OrmManyToOne ann = field.getAnnotation(OrmManyToOne.class);
+      return new RelationInfo(
+          field,
+          RelationType.MANY_TO_ONE,
+          ann.targetEntity(),
+          ann.joinColumn(),
+          "",
+          "",
+          "",
+          ann.fetch(),
+          false
+      );
+    }
+
+    if (field.isAnnotationPresent(OrmManyToMany.class)) {
+      OrmManyToMany ann = field.getAnnotation(OrmManyToMany.class);
+      return new RelationInfo(
+          field,
+          RelationType.MANY_TO_MANY,
+          ann.targetEntity(),
+          ann.joinColumn(),
+          "",
+          ann.joinTable(),
+          ann.inverseJoinColumn(),
+          ann.fetch(),
+          ann.cascade()
+      );
+    }
+
+    return null;
   }
 
   protected ID getEntityId(T entity, TableMetadata metadata) {

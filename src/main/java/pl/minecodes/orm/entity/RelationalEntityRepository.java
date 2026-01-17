@@ -3,6 +3,8 @@ package pl.minecodes.orm.entity;
 import com.zaxxer.hikari.HikariDataSource;
 import java.lang.reflect.Field;
 import pl.minecodes.orm.FlexOrm;
+import pl.minecodes.orm.relation.CascadeHandler;
+import pl.minecodes.orm.relation.RelationLoader;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -13,12 +15,16 @@ import java.util.List;
 import java.util.Optional;
 import pl.minecodes.orm.table.TableMetadata;
 
-public abstract class RelationalEntityAgent<T, ID> extends BaseEntityAgent<T, ID> {
+public abstract class RelationalEntityRepository<T, ID> extends BaseEntityRepository<T, ID> {
 
   protected Connection activeConnection;
+  protected final RelationLoader relationLoader;
+  protected final CascadeHandler cascadeHandler;
 
-  protected RelationalEntityAgent(FlexOrm orm, Class<T> entityClass) {
+  protected RelationalEntityRepository(FlexOrm orm, Class<T> entityClass) {
     super(orm, entityClass);
+    this.relationLoader = new RelationLoader(orm, metadataCache, this::extractTableMetadata);
+    this.cascadeHandler = new CascadeHandler(orm, metadataCache, this::extractTableMetadata);
   }
 
   @Override
@@ -43,22 +49,98 @@ public abstract class RelationalEntityAgent<T, ID> extends BaseEntityAgent<T, ID
   @Override
   protected void insert(T entity) {
     TableMetadata metadata = getTableMetadata(entityClass);
-    insertIntoDatabase(entity, metadata);
+    try {
+      Connection connection = getConnection();
+      boolean autoClose = activeConnection == null;
+      try {
+        cascadeHandler.handleCascadeSave(entity, metadata, connection, (relatedEntity, conn) -> {
+          saveRelatedEntity(relatedEntity, conn);
+        });
+        insertIntoDatabase(entity, metadata);
+        cascadeHandler.saveManyToManyRelations(entity, metadata, connection);
+      } finally {
+        if (autoClose) {
+          connection.close();
+        }
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("Error in cascade insert", e);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  private void saveRelatedEntity(Object entity, Connection connection) {
+    Class<?> entityClass = entity.getClass();
+    TableMetadata metadata = getTableMetadata(entityClass);
+    try {
+      Object id = metadata.idField().get(entity);
+      if (id != null && existsByIdInternal(id, metadata, connection)) {
+        updateInDatabaseInternal(entity, metadata, connection);
+      } else {
+        insertIntoDatabaseInternal(entity, metadata, connection);
+      }
+    } catch (Exception e) {
+      throw new RuntimeException("Error saving related entity", e);
+    }
+  }
+
+  private boolean existsByIdInternal(Object id, TableMetadata metadata, Connection connection) {
+    try {
+      String idColumnName = getColumnNameForField(metadata.idField(), metadata);
+      String sql = "SELECT 1 FROM " + metadata.tableName() + " WHERE " + idColumnName + " = ?";
+      try (PreparedStatement statement = connection.prepareStatement(sql)) {
+        statement.setObject(1, id);
+        try (ResultSet resultSet = statement.executeQuery()) {
+          return resultSet.next();
+        }
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("Error checking entity existence", e);
+    }
   }
 
   @Override
   public void update(T entity) {
     validateEntity(entity);
     TableMetadata metadata = getTableMetadata(entityClass);
-    updateInDatabase(entity, metadata);
+    try {
+      Connection connection = getConnection();
+      boolean autoClose = activeConnection == null;
+      try {
+        cascadeHandler.handleCascadeSave(entity, metadata, connection, (relatedEntity, conn) -> {
+          saveRelatedEntity(relatedEntity, conn);
+        });
+        updateInDatabase(entity, metadata);
+        cascadeHandler.saveManyToManyRelations(entity, metadata, connection);
+      } finally {
+        if (autoClose) {
+          connection.close();
+        }
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("Error in cascade update", e);
+    }
   }
 
   @Override
   public void delete(T entity) {
     validateEntity(entity);
     TableMetadata metadata = getTableMetadata(entityClass);
-    Object id = getEntityId(entity, metadata);
-    deleteById((ID) id);
+    try {
+      Connection connection = getConnection();
+      boolean autoClose = activeConnection == null;
+      try {
+        cascadeHandler.handleCascadeDelete(entity, metadata, connection);
+        Object id = getEntityId(entity, metadata);
+        deleteFromDatabase((ID) id, metadata);
+      } finally {
+        if (autoClose) {
+          connection.close();
+        }
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("Error in cascade delete", e);
+    }
   }
 
   @Override
@@ -163,16 +245,24 @@ public abstract class RelationalEntityAgent<T, ID> extends BaseEntityAgent<T, ID
         sql.append("INSERT INTO ").append(metadata.tableName()).append(" (");
 
         List<Object> values = new ArrayList<>();
+        List<String> columns = new ArrayList<>();
         StringBuilder placeholders = new StringBuilder();
 
         for (var entry : metadata.columnFields().entrySet()) {
           try {
+            if (entry.getValue().equals(metadata.idField())) {
+              Object idValue = entry.getValue().get(entity);
+              if (idValue == null) {
+                continue;
+              }
+            }
             Object value = entry.getValue().get(entity);
             if (!values.isEmpty()) {
               sql.append(", ");
               placeholders.append(", ");
             }
             sql.append(entry.getKey());
+            columns.add(entry.getKey());
             placeholders.append("?");
             values.add(value);
           } catch (IllegalAccessException e) {
@@ -182,18 +272,32 @@ public abstract class RelationalEntityAgent<T, ID> extends BaseEntityAgent<T, ID
 
         sql.append(") VALUES (").append(placeholders).append(")");
 
-        try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+        try (PreparedStatement statement = connection.prepareStatement(sql.toString(), java.sql.Statement.RETURN_GENERATED_KEYS)) {
           for (int i = 0; i < values.size(); i++) {
             statement.setObject(i + 1, values.get(i));
           }
           statement.executeUpdate();
+
+          try (ResultSet generatedKeys = statement.getGeneratedKeys()) {
+            if (generatedKeys.next()) {
+              Object generatedId = generatedKeys.getObject(1);
+              Field idField = metadata.idField();
+              if (idField.getType() == Long.class || idField.getType() == long.class) {
+                idField.set(entity, generatedKeys.getLong(1));
+              } else if (idField.getType() == Integer.class || idField.getType() == int.class) {
+                idField.set(entity, generatedKeys.getInt(1));
+              } else {
+                idField.set(entity, generatedId);
+              }
+            }
+          }
         }
       } finally {
         if (autoClose) {
           connection.close();
         }
       }
-    } catch (SQLException e) {
+    } catch (SQLException | IllegalAccessException e) {
       throw new RuntimeException("Error inserting entity to database", e);
     }
   }
@@ -297,28 +401,14 @@ public abstract class RelationalEntityAgent<T, ID> extends BaseEntityAgent<T, ID
                   Object value = resultSet.getObject(columnName);
 
                   if (value != null) {
-                    // Konwersja dla pól typu boolean
-                    if (field.getType() == boolean.class || field.getType() == Boolean.class) {
-                      if (value instanceof Integer) {
-                        boolean boolValue = ((Integer) value) != 0;
-                        field.set(instance, boolValue);
-                      } else if (value instanceof Long) {
-                        boolean boolValue = ((Long) value) != 0L;
-                        field.set(instance, boolValue);
-                      } else if (value instanceof String) {
-                        boolean boolValue = "true".equalsIgnoreCase((String) value) || "1".equals(value);
-                        field.set(instance, boolValue);
-                      } else {
-                        field.set(instance, value);
-                      }
-                    } else {
-                      field.set(instance, value);
-                    }
+                    value = convertValue(value, field.getType());
+                    field.set(instance, value);
                   }
-                } catch (SQLException e) {
-                  System.err.println("Warning: Problem accessing column: " + e.getMessage());
+                } catch (SQLException ignored) {
                 }
               }
+
+              relationLoader.loadRelations(instance, metadata, connection);
 
               return Optional.of(instance);
             }
@@ -360,28 +450,14 @@ public abstract class RelationalEntityAgent<T, ID> extends BaseEntityAgent<T, ID
                 Object value = resultSet.getObject(columnName);
 
                 if (value != null) {
-                  // Konwersja dla pól typu boolean
-                  if (field.getType() == boolean.class || field.getType() == Boolean.class) {
-                    if (value instanceof Integer) {
-                      boolean boolValue = ((Integer) value) != 0;
-                      field.set(instance, boolValue);
-                    } else if (value instanceof Long) {
-                      boolean boolValue = ((Long) value) != 0L;
-                      field.set(instance, boolValue);
-                    } else if (value instanceof String) {
-                      boolean boolValue = "true".equalsIgnoreCase((String) value) || "1".equals(value);
-                      field.set(instance, boolValue);
-                    } else {
-                      field.set(instance, value);
-                    }
-                  } else {
-                    field.set(instance, value);
-                  }
+                  value = convertValue(value, field.getType());
+                  field.set(instance, value);
                 }
-              } catch (SQLException e) {
-                System.err.println("Warning: Problem accessing column: " + e.getMessage());
+              } catch (SQLException ignored) {
               }
             }
+
+            relationLoader.loadRelations(instance, metadata, connection);
 
             results.add(instance);
           }
@@ -396,5 +472,122 @@ public abstract class RelationalEntityAgent<T, ID> extends BaseEntityAgent<T, ID
     } catch (Exception e) {
       throw new RuntimeException("Error finding all entities in database", e);
     }
+  }
+
+  private void insertIntoDatabaseInternal(Object entity, TableMetadata metadata, Connection connection) {
+    try {
+      StringBuilder sql = new StringBuilder();
+      sql.append("INSERT INTO ").append(metadata.tableName()).append(" (");
+
+      List<Object> values = new ArrayList<>();
+      StringBuilder placeholders = new StringBuilder();
+
+      for (var entry : metadata.columnFields().entrySet()) {
+        try {
+          Object value = entry.getValue().get(entity);
+          if (!values.isEmpty()) {
+            sql.append(", ");
+            placeholders.append(", ");
+          }
+          sql.append(entry.getKey());
+          placeholders.append("?");
+          values.add(value);
+        } catch (IllegalAccessException e) {
+          throw new RuntimeException("Could not access field " + entry.getKey(), e);
+        }
+      }
+
+      sql.append(") VALUES (").append(placeholders).append(")");
+
+      try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+        for (int i = 0; i < values.size(); i++) {
+          statement.setObject(i + 1, values.get(i));
+        }
+        statement.executeUpdate();
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("Error inserting related entity to database", e);
+    }
+  }
+
+  private void updateInDatabaseInternal(Object entity, TableMetadata metadata, Connection connection) {
+    try {
+      StringBuilder sql = new StringBuilder();
+      sql.append("UPDATE ").append(metadata.tableName()).append(" SET ");
+
+      List<Object> values = new ArrayList<>();
+      Object idValue = null;
+      String idColumnName = getColumnNameForField(metadata.idField(), metadata);
+
+      boolean first = true;
+      for (var entry : metadata.columnFields().entrySet()) {
+        try {
+          if (entry.getValue().equals(metadata.idField())) {
+            idValue = entry.getValue().get(entity);
+            continue;
+          }
+
+          Object value = entry.getValue().get(entity);
+          if (!first) {
+            sql.append(", ");
+          }
+          sql.append(entry.getKey()).append(" = ?");
+          values.add(value);
+          first = false;
+        } catch (IllegalAccessException e) {
+          throw new RuntimeException("Could not access field " + entry.getKey(), e);
+        }
+      }
+
+      sql.append(" WHERE ").append(idColumnName).append(" = ?");
+      values.add(idValue);
+
+      try (PreparedStatement statement = connection.prepareStatement(sql.toString())) {
+        for (int i = 0; i < values.size(); i++) {
+          statement.setObject(i + 1, values.get(i));
+        }
+        statement.executeUpdate();
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("Error updating related entity in database", e);
+    }
+  }
+
+  protected Object convertValue(Object value, Class<?> targetType) {
+    if (value == null) {
+      return null;
+    }
+
+    if (targetType == Long.class || targetType == long.class) {
+      if (value instanceof Integer) {
+        return ((Integer) value).longValue();
+      } else if (value instanceof Number) {
+        return ((Number) value).longValue();
+      }
+    } else if (targetType == Integer.class || targetType == int.class) {
+      if (value instanceof Long) {
+        return ((Long) value).intValue();
+      } else if (value instanceof Number) {
+        return ((Number) value).intValue();
+      }
+    } else if (targetType == Double.class || targetType == double.class) {
+      if (value instanceof Number) {
+        return ((Number) value).doubleValue();
+      }
+    } else if (targetType == Float.class || targetType == float.class) {
+      if (value instanceof Number) {
+        return ((Number) value).floatValue();
+      }
+    } else if (targetType == boolean.class || targetType == Boolean.class) {
+      if (value instanceof Integer) {
+        return ((Integer) value) != 0;
+      } else if (value instanceof Long) {
+        return ((Long) value) != 0L;
+      } else if (value instanceof String) {
+        return "true".equalsIgnoreCase((String) value) || "1".equals(value);
+      }
+    }
+
+    return value;
   }
 }

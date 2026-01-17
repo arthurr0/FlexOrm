@@ -35,7 +35,15 @@ public class SQLiteConnection implements Connection<HikariDataSource> {
     hikariConfig.setDriverClassName("org.sqlite.JDBC");
 
     String jdbcUrl;
-    if (this.connectionCredentials.databaseFile() != null) {
+    if (this.connectionCredentials.databaseFile() != null && this.connectionCredentials.database() != null) {
+      java.io.File dbFile = this.connectionCredentials.databaseFile();
+      if (dbFile.isDirectory() || !dbFile.getName().endsWith(".db")) {
+        java.io.File fullPath = new java.io.File(dbFile, this.connectionCredentials.database());
+        jdbcUrl = "jdbc:sqlite:" + fullPath.getAbsolutePath();
+      } else {
+        jdbcUrl = "jdbc:sqlite:" + dbFile.getAbsolutePath();
+      }
+    } else if (this.connectionCredentials.databaseFile() != null) {
       jdbcUrl = "jdbc:sqlite:" + this.connectionCredentials.databaseFile().getAbsolutePath();
     } else {
       jdbcUrl = "jdbc:sqlite:" + this.connectionCredentials.database();

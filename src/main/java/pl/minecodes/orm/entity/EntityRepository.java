@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import pl.minecodes.orm.query.Query;
 
-public interface EntityAgent<T, ID> {
+public interface EntityRepository<T, ID> {
 
   void save(T entity);
 

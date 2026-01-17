@@ -12,11 +12,11 @@ import java.util.List;
 import java.util.Optional;
 import pl.minecodes.orm.table.TableMetadata;
 
-public class MongoEntityAgent<T, ID> extends BaseEntityAgent<T, ID> {
+public class MongoEntityRepository<T, ID> extends BaseEntityRepository<T, ID> {
 
   private ClientSession activeSession;
 
-  public MongoEntityAgent(FlexOrm orm, Class<T> entityClass) {
+  public MongoEntityRepository(FlexOrm orm, Class<T> entityClass) {
     super(orm, entityClass);
   }
 

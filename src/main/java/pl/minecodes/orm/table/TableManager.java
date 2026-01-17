@@ -5,6 +5,7 @@ import pl.minecodes.orm.FlexOrm;
 import pl.minecodes.orm.annotation.OrmEntity;
 import pl.minecodes.orm.annotation.OrmEntityId;
 import pl.minecodes.orm.annotation.OrmField;
+import pl.minecodes.orm.annotation.OrmIndex;
 import pl.minecodes.orm.exception.ObjectRequiredAnnotationsException;
 
 import java.lang.reflect.Field;
@@ -40,10 +41,15 @@ public class TableManager {
     String tableName = ormEntity.table().isEmpty() ? entityClass.getSimpleName().toLowerCase() : ormEntity.table();
 
     switch (orm.getDatabaseType()) {
-      case MYSQL -> createMySQLTable(entityClass, tableName);
-      case SQLLITE -> createSQLiteTable(entityClass, tableName);
+      case MYSQL -> {
+        createMySQLTable(entityClass, tableName);
+        createIndexes(entityClass, tableName);
+      }
+      case SQLLITE -> {
+        createSQLiteTable(entityClass, tableName);
+        createIndexes(entityClass, tableName);
+      }
       case MONGODB -> createMongoCollection(tableName);
-      case JSON -> createJsonStructure(tableName);
     }
   }
 
@@ -58,7 +64,7 @@ public class TableManager {
     switch (orm.getDatabaseType()) {
       case MYSQL -> updateMySQLTable(entityClass, tableName);
       case SQLLITE -> updateSQLiteTable(entityClass, tableName);
-      case JSON -> updateJsonStructure(entityClass, tableName);
+      case MONGODB -> {}
     }
   }
 
@@ -102,11 +108,7 @@ public class TableManager {
         }
         return false;
       }
-      case JSON -> {
-        return false;
-      }
     }
-
     return false;
   }
 
@@ -338,12 +340,38 @@ public class TableManager {
     database.createCollection(collectionName);
   }
 
-  private void createJsonStructure(String structureName) {
-    throw new UnsupportedOperationException("JSON storage not implemented yet");
-  }
+  private <T> void createIndexes(Class<T> entityClass, String tableName) {
+    HikariDataSource dataSource = (HikariDataSource) orm.getConnection().getConnection();
 
-  private <T> void updateJsonStructure(Class<T> entityClass, String structureName) {
-    throw new UnsupportedOperationException("JSON storage not implemented yet");
+    try (Connection connection = dataSource.getConnection()) {
+      for (Field field : entityClass.getDeclaredFields()) {
+        if (!field.isAnnotationPresent(OrmIndex.class)) {
+          continue;
+        }
+
+        OrmIndex indexAnnotation = field.getAnnotation(OrmIndex.class);
+        String columnName = getColumnName(field);
+
+        String indexName = indexAnnotation.name().isEmpty()
+            ? "idx_" + tableName + "_" + columnName
+            : indexAnnotation.name();
+
+        String indexType = indexAnnotation.unique() ? "UNIQUE INDEX" : "INDEX";
+
+        String sql;
+        if (orm.getDatabaseType() == DatabaseType.MYSQL) {
+          sql = "CREATE " + indexType + " IF NOT EXISTS " + indexName + " ON " + tableName + " (" + columnName + ")";
+        } else {
+          sql = "CREATE " + indexType + " IF NOT EXISTS " + indexName + " ON " + tableName + " (" + columnName + ")";
+        }
+
+        try (Statement statement = connection.createStatement()) {
+          statement.execute(sql);
+        }
+      }
+    } catch (SQLException e) {
+      throw new RuntimeException("Error creating indexes: " + e.getMessage(), e);
+    }
   }
 
   private String createColumnDefinition(Field field, DatabaseType databaseType) {
@@ -560,6 +588,18 @@ public class TableManager {
         return "FLOAT";
       } else if (javaType == java.util.Date.class || javaType == java.sql.Date.class) {
         return "DATETIME";
+      } else if (javaType == java.sql.Timestamp.class) {
+        return "TIMESTAMP";
+      } else if (javaType == java.time.LocalDateTime.class) {
+        return "DATETIME";
+      } else if (javaType == java.time.LocalDate.class) {
+        return "DATE";
+      } else if (javaType == java.time.LocalTime.class) {
+        return "TIME";
+      } else if (javaType == java.math.BigDecimal.class) {
+        return "DECIMAL(19,4)";
+      } else if (javaType == java.math.BigInteger.class) {
+        return "BIGINT";
       } else if (javaType == byte[].class) {
         return "BLOB";
       } else if (javaType.isEnum()) {
@@ -580,6 +620,18 @@ public class TableManager {
         return "REAL";
       } else if (javaType == java.util.Date.class || javaType == java.sql.Date.class) {
         return "TEXT";
+      } else if (javaType == java.sql.Timestamp.class) {
+        return "TEXT";
+      } else if (javaType == java.time.LocalDateTime.class) {
+        return "TEXT";
+      } else if (javaType == java.time.LocalDate.class) {
+        return "TEXT";
+      } else if (javaType == java.time.LocalTime.class) {
+        return "TEXT";
+      } else if (javaType == java.math.BigDecimal.class) {
+        return "TEXT";
+      } else if (javaType == java.math.BigInteger.class) {
+        return "INTEGER";
       } else if (javaType == byte[].class) {
         return "BLOB";
       } else if (javaType.isEnum()) {
