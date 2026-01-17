@@ -1,20 +1,20 @@
 # FlexOrm
 
-FlexOrm to elastyczna i wydajna biblioteka ORM dla języka Java, umożliwiająca prostą integrację z MySQL, MongoDB i SQLite. Biblioteka zaprojektowana została z myślą o łatwości użycia przy zachowaniu dużej elastyczności i wydajności.
+FlexOrm is a flexible and efficient ORM library for Java, enabling simple integration with MySQL, MongoDB, and SQLite. The library was designed with ease of use in mind while maintaining high flexibility and performance.
 
-## Funkcje
+## Features
 
-- **Wsparcie dla wielu baz danych**: MySQL, MongoDB, SQLite
-- **Fluent Query Builder**: Intuicyjne API do budowania zapytań
-- **Relacje między encjami**: OneToOne, OneToMany, ManyToOne, ManyToMany
-- **Lazy/Eager Loading**: Kontrola nad ładowaniem relacji
-- **Operacje kaskadowe**: Automatyczne zapisywanie/usuwanie powiązanych encji
-- **Transakcje**: Pełne wsparcie dla transakcji
-- **System migracji**: Zarządzanie schematem bazy danych
-- **Walidacja encji**: Wbudowana walidacja pól
-- **Connection Pooling**: HikariCP dla MySQL i SQLite
+- **Multi-database support**: MySQL, MongoDB, SQLite
+- **Fluent Query Builder**: Intuitive API for building queries
+- **Entity relationships**: OneToOne, OneToMany, ManyToOne, ManyToMany
+- **Lazy/Eager Loading**: Control over relationship loading
+- **Cascade operations**: Automatic saving/deleting of related entities
+- **Transactions**: Full transaction support
+- **Migration system**: Database schema management
+- **Entity validation**: Built-in field validation
+- **Connection Pooling**: HikariCP for MySQL and SQLite
 
-## Instalacja
+## Installation
 
 ### Maven
 
@@ -26,7 +26,7 @@ FlexOrm to elastyczna i wydajna biblioteka ORM dla języka Java, umożliwiająca
 </dependency>
 ```
 
-### Zależności dla baz danych
+### Database dependencies
 
 #### MySQL
 ```xml
@@ -55,9 +55,9 @@ FlexOrm to elastyczna i wydajna biblioteka ORM dla języka Java, umożliwiająca
 </dependency>
 ```
 
-## Szybki start
+## Quick Start
 
-### 1. Definiowanie encji
+### 1. Defining entities
 
 ```java
 @OrmEntity(table = "users")
@@ -77,14 +77,14 @@ public class User {
   @OrmOneToMany(targetEntity = Post.class, mappedBy = "author", fetch = FetchType.LAZY)
   private List<Post> posts;
 
-  // Konstruktor bezargumentowy wymagany
+  // No-argument constructor required
   public User() {}
 
-  // Gettery i settery...
+  // Getters and setters...
 }
 ```
 
-### 2. Połączenie z bazą danych
+### 2. Database connection
 
 ```java
 // MySQL
@@ -97,62 +97,62 @@ FlexOrm orm = FlexOrm.sqllite("database.db").connect();
 FlexOrm orm = FlexOrm.mongodb("localhost", 27017, "database", "user", "password", new Gson()).connect();
 ```
 
-### 3. Operacje CRUD
+### 3. CRUD operations
 
 ```java
-EntityAgent<User, Long> userAgent = orm.getEntityAgent(User.class);
+EntityRepository<User, Long> userRepository = orm.getEntityRepository(User.class);
 
 // Create
 User user = new User();
-user.setName("Jan Kowalski");
-user.setEmail("jan@example.com");
-userAgent.save(user);
+user.setName("John Smith");
+user.setEmail("john@example.com");
+userRepository.save(user);
 
 // Read
-Optional<User> found = userAgent.findById(1L);
-List<User> all = userAgent.findAll();
+Optional<User> found = userRepository.findById(1L);
+List<User> all = userRepository.findAll();
 
 // Update
-user.setName("Jan Nowak");
-userAgent.update(user);
+user.setName("John Doe");
+userRepository.update(user);
 
 // Delete
-userAgent.delete(user);
-userAgent.deleteById(1L);
+userRepository.delete(user);
+userRepository.deleteById(1L);
 ```
 
 ## Query Builder
 
-FlexOrm oferuje fluent API do budowania zapytań:
+FlexOrm provides a fluent API for building queries:
 
 ```java
-List<User> users = userAgent.query()
-    .where("name", Operator.LIKE, "Jan%")
+List<User> users = userRepository.query()
+    .where("name", Operator.LIKE, "John%")
     .and("email", Operator.IS_NOT_NULL, null)
     .orderBy("name", true)
     .limit(10)
     .offset(0)
     .execute();
 
-long count = userAgent.query()
+long count = userRepository.query()
     .where("active", Operator.EQUALS, true)
     .count();
 ```
 
-### Dostępne operatory
+### Available operators
 
-- `EQUALS` - równość
-- `NOT_EQUALS` - nierówność
-- `GREATER_THAN` - większy niż
-- `LESS_THAN` - mniejszy niż
-- `GREATER_THAN_OR_EQUALS` - większy lub równy
-- `LESS_THAN_OR_EQUALS` - mniejszy lub równy
-- `LIKE` - dopasowanie wzorca
-- `IN` - wartość w zbiorze
-- `IS_NULL` - jest null
-- `IS_NOT_NULL` - nie jest null
+- `EQUALS` - equality
+- `NOT_EQUALS` - inequality
+- `GREATER_THAN` - greater than
+- `LESS_THAN` - less than
+- `GREATER_THAN_OR_EQUALS` - greater than or equal
+- `LESS_THAN_OR_EQUALS` - less than or equal
+- `LIKE` - pattern matching
+- `IN` - value in set
+- `IS_NULL` - is null
+- `IS_NOT_NULL` - is not null
 
-## Relacje
+## Relationships
 
 ### OneToOne
 
@@ -201,30 +201,30 @@ public class User {
 }
 ```
 
-## Transakcje
+## Transactions
 
 ```java
-userAgent.beginTransaction();
+userRepository.beginTransaction();
 try {
-  userAgent.save(user1);
-  userAgent.save(user2);
-  userAgent.commitTransaction();
+  userRepository.save(user1);
+  userRepository.save(user2);
+  userRepository.commitTransaction();
 } catch (Exception e) {
-  userAgent.rollbackTransaction();
+  userRepository.rollbackTransaction();
   throw e;
 }
 ```
 
-## Zarządzanie schematem
+## Schema Management
 
-### Tworzenie tabel
+### Creating tables
 
 ```java
 TableManager tableManager = new TableManager(orm);
 tableManager.createOrUpdateTable(User.class);
 ```
 
-### Migracje
+### Migrations
 
 ```java
 MigrationManager migrationManager = new MigrationManager(orm);
@@ -236,42 +236,42 @@ migrationManager.addMigration(new Migration() {
   @Override public String getDownSql() { return "DROP TABLE users"; }
 });
 
-migrationManager.migrate();  // Zastosuj migracje
-migrationManager.rollback(); // Cofnij ostatnią migrację
+migrationManager.migrate();  // Apply migrations
+migrationManager.rollback(); // Rollback last migration
 ```
 
-## Adnotacje
+## Annotations
 
-| Adnotacja | Opis |
-|-----------|------|
-| `@OrmEntity` | Oznacza klasę jako encję |
-| `@OrmEntityId` | Oznacza pole jako klucz główny |
-| `@OrmField` | Konfiguracja kolumny (name, nullable, length, defaultValue) |
-| `@OrmTransient` | Pole pomijane przy persystencji |
-| `@OrmIndex` | Tworzy indeks na kolumnie |
-| `@OrmNotNull` | Walidacja - pole nie może być null |
-| `@OrmOneToOne` | Relacja jeden-do-jednego |
-| `@OrmOneToMany` | Relacja jeden-do-wielu |
-| `@OrmManyToOne` | Relacja wiele-do-jednego |
-| `@OrmManyToMany` | Relacja wiele-do-wielu |
+| Annotation | Description |
+|------------|-------------|
+| `@OrmEntity` | Marks class as an entity |
+| `@OrmEntityId` | Marks field as primary key |
+| `@OrmField` | Column configuration (name, nullable, length, defaultValue) |
+| `@OrmTransient` | Field excluded from persistence |
+| `@OrmIndex` | Creates index on column |
+| `@OrmNotNull` | Validation - field cannot be null |
+| `@OrmOneToOne` | One-to-one relationship |
+| `@OrmOneToMany` | One-to-many relationship |
+| `@OrmManyToOne` | Many-to-one relationship |
+| `@OrmManyToMany` | Many-to-many relationship |
 
-## Obsługiwane typy
+## Supported Types
 
-- Podstawowe: `String`, `int`, `long`, `double`, `float`, `boolean`
-- Wrapper: `Integer`, `Long`, `Double`, `Float`, `Boolean`
-- Data/Czas: `Date`, `Timestamp`, `LocalDateTime`, `LocalDate`, `LocalTime`
-- Numeryczne: `BigDecimal`, `BigInteger`
-- Inne: `byte[]`, `Enum`
+- Primitives: `String`, `int`, `long`, `double`, `float`, `boolean`
+- Wrappers: `Integer`, `Long`, `Double`, `Float`, `Boolean`
+- Date/Time: `Date`, `Timestamp`, `LocalDateTime`, `LocalDate`, `LocalTime`
+- Numeric: `BigDecimal`, `BigInteger`
+- Other: `byte[]`, `Enum`
 
-## Wyjątki
+## Exceptions
 
-- `OrmException` - bazowy wyjątek ORM
-- `ValidationException` - błąd walidacji encji
-- `ConnectionException` - błąd połączenia
-- `QueryException` - błąd wykonania zapytania
-- `EntityNotFoundException` - encja nie znaleziona
-- `TransactionException` - błąd transakcji
+- `OrmException` - base ORM exception
+- `ValidationException` - entity validation error
+- `ConnectionException` - connection error
+- `QueryException` - query execution error
+- `EntityNotFoundException` - entity not found
+- `TransactionException` - transaction error
 
-## Licencja
+## License
 
 MIT License
