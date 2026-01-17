@@ -8,18 +8,10 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface OrmManyToOne {
-  /**
-   * Klasa encji docelowej.
-   */
+
   Class<?> targetEntity();
-  
-  /**
-   * Nazwa kolumny przechowującej klucz obcy.
-   */
+
   String joinColumn() default "";
-  
-  /**
-   * Strategia wczytywania (eager/lazy).
-   */
+
   FetchType fetch() default FetchType.EAGER;
 }

@@ -32,7 +32,8 @@ public class MongoConnection implements Connection<MongoDatabase> {
             )))
         );
 
-    if (this.connectionCredentials.username() != null && this.connectionCredentials.password() != null) {
+    if (this.connectionCredentials.username() != null
+        && this.connectionCredentials.password() != null) {
       MongoCredential credential = MongoCredential.createCredential(
           this.connectionCredentials.username(),
           this.connectionCredentials.database(),

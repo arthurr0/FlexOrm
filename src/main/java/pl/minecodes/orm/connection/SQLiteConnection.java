@@ -35,7 +35,8 @@ public class SQLiteConnection implements Connection<HikariDataSource> {
     hikariConfig.setDriverClassName("org.sqlite.JDBC");
 
     String jdbcUrl;
-    if (this.connectionCredentials.databaseFile() != null && this.connectionCredentials.database() != null) {
+    if (this.connectionCredentials.databaseFile() != null
+        && this.connectionCredentials.database() != null) {
       java.io.File dbFile = this.connectionCredentials.databaseFile();
       if (dbFile.isDirectory() || !dbFile.getName().endsWith(".db")) {
         java.io.File fullPath = new java.io.File(dbFile, this.connectionCredentials.database());

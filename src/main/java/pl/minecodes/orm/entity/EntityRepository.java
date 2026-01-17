@@ -39,9 +39,11 @@ public interface EntityRepository<T, ID> {
 
   <R> R executeRawQuery(String rawQuery, QueryResultMapper<R> mapper);
 
-  <R> R executeRawQuery(String rawQuery, QueryResultMapper<R> mapper, Consumer<Exception> errorHandler);
+  <R> R executeRawQuery(String rawQuery, QueryResultMapper<R> mapper,
+      Consumer<Exception> errorHandler);
 
   interface QueryResultMapper<R> {
+
     R map(Object resultSet);
   }
 }

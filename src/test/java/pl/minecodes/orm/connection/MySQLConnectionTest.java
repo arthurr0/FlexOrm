@@ -49,7 +49,6 @@ class MySQLConnectionTest {
         dataSource.close();
       }
     } catch (IllegalStateException e) {
-      //Ignore
     }
   }
 

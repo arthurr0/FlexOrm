@@ -1,6 +1,7 @@
 package pl.minecodes.orm.exception;
 
 public class EntityNotFoundException extends OrmException {
+
   public EntityNotFoundException(String message) {
     super(message);
   }

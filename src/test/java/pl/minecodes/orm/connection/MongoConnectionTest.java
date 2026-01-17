@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.mongodb.client.MongoDatabase;
 import org.bson.Document;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.testcontainers.containers.MongoDBContainer;
@@ -27,7 +26,7 @@ class MongoConnectionTest {
   void setUp() {
     credentials = new ConnectionCredentials(
         mongoDBContainer.getHost(),
-        mongoDBContainer.getFirstMappedPort(), 
+        mongoDBContainer.getFirstMappedPort(),
         "test",
         null,
         null,

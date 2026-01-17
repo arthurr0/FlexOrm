@@ -1,13 +1,15 @@
 package pl.minecodes.orm.validation;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.junit.jupiter.api.Test;
 import pl.minecodes.orm.annotation.OrmEntity;
 import pl.minecodes.orm.annotation.OrmEntityId;
 import pl.minecodes.orm.annotation.OrmField;
 import pl.minecodes.orm.annotation.OrmNotNull;
 import pl.minecodes.orm.exception.ValidationException;
-
-import static org.junit.jupiter.api.Assertions.*;
 
 class ValidationTest {
 
@@ -54,7 +56,8 @@ class ValidationTest {
   void testStringExceedsMaxLength() {
     ValidEntity entity = new ValidEntity();
     entity.setId(1L);
-    entity.setName("This name is way too long and exceeds the maximum length of 50 characters that we set");
+    entity.setName(
+        "This name is way too long and exceeds the maximum length of 50 characters that we set");
     entity.setDescription("OK");
 
     ValidationException exception = assertThrows(ValidationException.class,
@@ -64,6 +67,7 @@ class ValidationTest {
 
   @OrmEntity(table = "valid_entities")
   static class ValidEntity {
+
     @OrmEntityId
     private Long id;
 
@@ -74,15 +78,31 @@ class ValidationTest {
     @OrmField(nullable = false)
     private String description;
 
-    public ValidEntity() {}
+    public ValidEntity() {
+    }
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+      return id;
+    }
 
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
+    public void setId(Long id) {
+      this.id = id;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public String getName() {
+      return name;
+    }
+
+    public void setName(String name) {
+      this.name = name;
+    }
+
+    public String getDescription() {
+      return description;
+    }
+
+    public void setDescription(String description) {
+      this.description = description;
+    }
   }
 }

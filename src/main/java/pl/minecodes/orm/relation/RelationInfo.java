@@ -1,8 +1,7 @@
 package pl.minecodes.orm.relation;
 
-import pl.minecodes.orm.annotation.FetchType;
-
 import java.lang.reflect.Field;
+import pl.minecodes.orm.annotation.FetchType;
 
 public record RelationInfo(
     Field field,
@@ -15,6 +14,7 @@ public record RelationInfo(
     FetchType fetchType,
     boolean cascade
 ) {
+
   public boolean isOwning() {
     return joinColumn != null && !joinColumn.isEmpty();
   }

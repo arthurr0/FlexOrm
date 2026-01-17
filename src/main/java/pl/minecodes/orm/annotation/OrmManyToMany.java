@@ -8,33 +8,16 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface OrmManyToMany {
-  /**
-   * Klasa encji docelowej.
-   */
+
   Class<?> targetEntity();
-  
-  /**
-   * Nazwa tabeli łączącej.
-   */
+
   String joinTable() default "";
-  
-  /**
-   * Nazwa kolumny w tabeli łączącej wskazującej na tę encję.
-   */
+
   String joinColumn() default "";
-  
-  /**
-   * Nazwa kolumny w tabeli łączącej wskazującej na encję docelową.
-   */
+
   String inverseJoinColumn() default "";
-  
-  /**
-   * Strategia wczytywania (eager/lazy).
-   */
+
   FetchType fetch() default FetchType.LAZY;
-  
-  /**
-   * Czy kaskadowo usuwać powiązane encje.
-   */
+
   boolean cascade() default false;
 }

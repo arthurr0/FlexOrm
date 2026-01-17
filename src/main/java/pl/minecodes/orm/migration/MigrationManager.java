@@ -1,9 +1,6 @@
 package pl.minecodes.orm.migration;
 
 import com.zaxxer.hikari.HikariDataSource;
-import pl.minecodes.orm.DatabaseType;
-import pl.minecodes.orm.FlexOrm;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -12,6 +9,8 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import pl.minecodes.orm.DatabaseType;
+import pl.minecodes.orm.FlexOrm;
 
 public class MigrationManager {
 
@@ -41,8 +40,8 @@ public class MigrationManager {
       int currentVersion = getCurrentVersion(connection);
 
       List<Migration> pendingMigrations = migrations.stream()
-          .filter(m -> m.getVersion() > currentVersion)
-          .sorted(Comparator.comparingInt(Migration::getVersion))
+          .filter(m -> m.version() > currentVersion)
+          .sorted(Comparator.comparingInt(Migration::version))
           .toList();
 
       for (Migration migration : pendingMigrations) {
@@ -114,13 +113,14 @@ public class MigrationManager {
     connection.setAutoCommit(false);
     try {
       try (Statement stmt = connection.createStatement()) {
-        stmt.execute(migration.getUpSql());
+        stmt.execute(migration.upSql());
       }
 
-      String insertSql = "INSERT INTO " + MIGRATIONS_TABLE + " (version, description) VALUES (?, ?)";
+      String insertSql =
+          "INSERT INTO " + MIGRATIONS_TABLE + " (version, description) VALUES (?, ?)";
       try (PreparedStatement stmt = connection.prepareStatement(insertSql)) {
-        stmt.setInt(1, migration.getVersion());
-        stmt.setString(2, migration.getDescription());
+        stmt.setInt(1, migration.version());
+        stmt.setString(2, migration.description());
         stmt.executeUpdate();
       }
 
@@ -137,12 +137,12 @@ public class MigrationManager {
     connection.setAutoCommit(false);
     try {
       try (Statement stmt = connection.createStatement()) {
-        stmt.execute(migration.getDownSql());
+        stmt.execute(migration.downSql());
       }
 
       String deleteSql = "DELETE FROM " + MIGRATIONS_TABLE + " WHERE version = ?";
       try (PreparedStatement stmt = connection.prepareStatement(deleteSql)) {
-        stmt.setInt(1, migration.getVersion());
+        stmt.setInt(1, migration.version());
         stmt.executeUpdate();
       }
 
@@ -169,7 +169,7 @@ public class MigrationManager {
 
   private Migration findMigrationByVersion(int version) {
     return migrations.stream()
-        .filter(m -> m.getVersion() == version)
+        .filter(m -> m.version() == version)
         .findFirst()
         .orElse(null);
   }

@@ -1,13 +1,7 @@
 package pl.minecodes.orm.table;
 
-import pl.minecodes.orm.DatabaseType;
-import pl.minecodes.orm.FlexOrm;
-import pl.minecodes.orm.annotation.OrmEntity;
-import pl.minecodes.orm.annotation.OrmEntityId;
-import pl.minecodes.orm.annotation.OrmField;
-import pl.minecodes.orm.annotation.OrmIndex;
-import pl.minecodes.orm.exception.ObjectRequiredAnnotationsException;
-
+import com.mongodb.client.MongoDatabase;
+import com.zaxxer.hikari.HikariDataSource;
 import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -20,9 +14,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import com.zaxxer.hikari.HikariDataSource;
-import com.mongodb.client.MongoDatabase;
+import pl.minecodes.orm.DatabaseType;
+import pl.minecodes.orm.FlexOrm;
+import pl.minecodes.orm.annotation.OrmEntity;
+import pl.minecodes.orm.annotation.OrmEntityId;
+import pl.minecodes.orm.annotation.OrmField;
+import pl.minecodes.orm.annotation.OrmIndex;
+import pl.minecodes.orm.exception.ObjectRequiredAnnotationsException;
 
 public class TableManager {
 
@@ -34,11 +32,13 @@ public class TableManager {
 
   public <T> void createTable(Class<T> entityClass) {
     if (!entityClass.isAnnotationPresent(OrmEntity.class)) {
-      throw new ObjectRequiredAnnotationsException("Class " + entityClass.getName() + " is not annotated with @OrmEntity");
+      throw new ObjectRequiredAnnotationsException(
+          "Class " + entityClass.getName() + " is not annotated with @OrmEntity");
     }
 
     OrmEntity ormEntity = entityClass.getAnnotation(OrmEntity.class);
-    String tableName = ormEntity.table().isEmpty() ? entityClass.getSimpleName().toLowerCase() : ormEntity.table();
+    String tableName =
+        ormEntity.table().isEmpty() ? entityClass.getSimpleName().toLowerCase() : ormEntity.table();
 
     switch (orm.getDatabaseType()) {
       case MYSQL -> {
@@ -55,26 +55,31 @@ public class TableManager {
 
   public <T> void updateTable(Class<T> entityClass) {
     if (!entityClass.isAnnotationPresent(OrmEntity.class)) {
-      throw new ObjectRequiredAnnotationsException("Class " + entityClass.getName() + " is not annotated with @OrmEntity");
+      throw new ObjectRequiredAnnotationsException(
+          "Class " + entityClass.getName() + " is not annotated with @OrmEntity");
     }
 
     OrmEntity ormEntity = entityClass.getAnnotation(OrmEntity.class);
-    String tableName = ormEntity.table().isEmpty() ? entityClass.getSimpleName().toLowerCase() : ormEntity.table();
+    String tableName =
+        ormEntity.table().isEmpty() ? entityClass.getSimpleName().toLowerCase() : ormEntity.table();
 
     switch (orm.getDatabaseType()) {
       case MYSQL -> updateMySQLTable(entityClass, tableName);
       case SQLLITE -> updateSQLiteTable(entityClass, tableName);
-      case MONGODB -> {}
+      case MONGODB -> {
+      }
     }
   }
 
   public <T> void createOrUpdateTable(Class<T> entityClass) {
     if (!entityClass.isAnnotationPresent(OrmEntity.class)) {
-      throw new ObjectRequiredAnnotationsException("Class " + entityClass.getName() + " is not annotated with @OrmEntity");
+      throw new ObjectRequiredAnnotationsException(
+          "Class " + entityClass.getName() + " is not annotated with @OrmEntity");
     }
 
     OrmEntity ormEntity = entityClass.getAnnotation(OrmEntity.class);
-    String tableName = ormEntity.table().isEmpty() ? entityClass.getSimpleName().toLowerCase() : ormEntity.table();
+    String tableName =
+        ormEntity.table().isEmpty() ? entityClass.getSimpleName().toLowerCase() : ormEntity.table();
 
     boolean tableExists = tableExists(tableName);
 
@@ -92,7 +97,8 @@ public class TableManager {
 
         try (Connection connection = dataSource.getConnection()) {
           DatabaseMetaData metaData = connection.getMetaData();
-          try (ResultSet resultSet = metaData.getTables(null, null, tableName, new String[]{"TABLE"})) {
+          try (ResultSet resultSet = metaData.getTables(null, null, tableName,
+              new String[]{"TABLE"})) {
             return resultSet.next();
           }
         } catch (SQLException e) {
@@ -138,7 +144,8 @@ public class TableManager {
       }
 
       if (idField == null) {
-        throw new ObjectRequiredAnnotationsException("Class " + entityClass.getName() + " does not have a field annotated with @OrmEntityId");
+        throw new ObjectRequiredAnnotationsException("Class " + entityClass.getName()
+            + " does not have a field annotated with @OrmEntityId");
       }
 
       sql.append(String.join(",\n", columns));
@@ -164,7 +171,8 @@ public class TableManager {
         ColumnInfo columnInfo = entry.getValue();
 
         if (!existingColumns.containsKey(columnName)) {
-          String alterSql = "ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnInfo.sqlType;
+          String alterSql =
+              "ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnInfo.sqlType;
 
           try (Statement statement = connection.createStatement()) {
             statement.execute(alterSql);
@@ -172,7 +180,8 @@ public class TableManager {
         } else {
           String existingType = existingColumns.get(columnName);
           if (!isCompatibleType(existingType, columnInfo.sqlType, DatabaseType.MYSQL)) {
-            String alterSql = "ALTER TABLE " + tableName + " MODIFY COLUMN " + columnName + " " + columnInfo.sqlType;
+            String alterSql = "ALTER TABLE " + tableName + " MODIFY COLUMN " + columnName + " "
+                + columnInfo.sqlType;
 
             try (Statement statement = connection.createStatement()) {
               statement.execute(alterSql);
@@ -223,7 +232,8 @@ public class TableManager {
       }
 
       if (idField == null) {
-        throw new ObjectRequiredAnnotationsException("Class " + entityClass.getName() + " does not have a field annotated with @OrmEntityId");
+        throw new ObjectRequiredAnnotationsException("Class " + entityClass.getName()
+            + " does not have a field annotated with @OrmEntityId");
       }
 
       sql.append(String.join(",\n", columns));
@@ -360,9 +370,11 @@ public class TableManager {
 
         String sql;
         if (orm.getDatabaseType() == DatabaseType.MYSQL) {
-          sql = "CREATE " + indexType + " IF NOT EXISTS " + indexName + " ON " + tableName + " (" + columnName + ")";
+          sql = "CREATE " + indexType + " IF NOT EXISTS " + indexName + " ON " + tableName + " ("
+              + columnName + ")";
         } else {
-          sql = "CREATE " + indexType + " IF NOT EXISTS " + indexName + " ON " + tableName + " (" + columnName + ")";
+          sql = "CREATE " + indexType + " IF NOT EXISTS " + indexName + " ON " + tableName + " ("
+              + columnName + ")";
         }
 
         try (Statement statement = connection.createStatement()) {
@@ -403,13 +415,15 @@ public class TableManager {
 
     if (field.isAnnotationPresent(OrmEntityId.class)) {
       if (databaseType == DatabaseType.MYSQL) {
-        if (field.getType() == int.class || field.getType() == Integer.class || field.getType() == long.class || field.getType() == Long.class) {
+        if (field.getType() == int.class || field.getType() == Integer.class
+            || field.getType() == long.class || field.getType() == Long.class) {
           definition.append(" PRIMARY KEY AUTO_INCREMENT");
         } else {
           definition.append(" PRIMARY KEY");
         }
       } else if (databaseType == DatabaseType.SQLLITE) {
-        if (field.getType() == int.class || field.getType() == Integer.class || field.getType() == long.class || field.getType() == Long.class) {
+        if (field.getType() == int.class || field.getType() == Integer.class
+            || field.getType() == long.class || field.getType() == Long.class) {
           definition.append(" PRIMARY KEY AUTOINCREMENT");
         } else {
           definition.append(" PRIMARY KEY");
@@ -449,7 +463,8 @@ public class TableManager {
     return false;
   }
 
-  private Map<String, String> getExistingColumns(Connection connection, String tableName) throws SQLException {
+  private Map<String, String> getExistingColumns(Connection connection, String tableName)
+      throws SQLException {
     Map<String, String> columns = new HashMap<>();
 
     DatabaseMetaData metaData = connection.getMetaData();
@@ -464,7 +479,8 @@ public class TableManager {
     return columns;
   }
 
-  private <T> Map<String, ColumnInfo> getEntityColumns(Class<T> entityClass, DatabaseType databaseType) {
+  private <T> Map<String, ColumnInfo> getEntityColumns(Class<T> entityClass,
+      DatabaseType databaseType) {
     Map<String, ColumnInfo> columns = new HashMap<>();
 
     for (Field field : entityClass.getDeclaredFields()) {
@@ -490,13 +506,15 @@ public class TableManager {
 
       if (isPrimaryKey) {
         if (databaseType == DatabaseType.MYSQL) {
-          if (field.getType() == int.class || field.getType() == Integer.class || field.getType() == long.class || field.getType() == Long.class) {
+          if (field.getType() == int.class || field.getType() == Integer.class
+              || field.getType() == long.class || field.getType() == Long.class) {
             fullType.append(" PRIMARY KEY AUTO_INCREMENT");
           } else {
             fullType.append(" PRIMARY KEY");
           }
         } else if (databaseType == DatabaseType.SQLLITE) {
-          if (field.getType() == int.class || field.getType() == Integer.class || field.getType() == long.class || field.getType() == Long.class) {
+          if (field.getType() == int.class || field.getType() == Integer.class
+              || field.getType() == long.class || field.getType() == Long.class) {
             fullType.append(" PRIMARY KEY AUTOINCREMENT");
           } else {
             fullType.append(" PRIMARY KEY");
@@ -520,17 +538,8 @@ public class TableManager {
     return columns;
   }
 
-  private static class ColumnInfo {
+  private record ColumnInfo(String baseType, String sqlType, Field field) {
 
-    final String baseType;
-    final String sqlType;
-    final Field field;
-
-    ColumnInfo(String baseType, String sqlType, Field field) {
-      this.baseType = baseType;
-      this.sqlType = sqlType;
-      this.field = field;
-    }
   }
 
   private boolean isCompatibleType(String existingType, String newType, DatabaseType databaseType) {
@@ -541,11 +550,14 @@ public class TableManager {
     baseNewType = baseNewType.replaceAll("\\(.*\\)", "");
 
     if (databaseType == DatabaseType.SQLLITE) {
-      if ((baseExistingType.equals("INTEGER") || baseExistingType.equals("INT")) && (baseNewType.equals("INTEGER") || baseNewType.equals("INT"))) {
+      if ((baseExistingType.equals("INTEGER") || baseExistingType.equals("INT")) && (
+          baseNewType.equals("INTEGER") || baseNewType.equals("INT"))) {
         return true;
       }
 
-      if ((baseExistingType.equals("REAL") || baseExistingType.equals("FLOAT") || baseExistingType.equals("DOUBLE")) && (baseNewType.equals("REAL") || baseNewType.equals("FLOAT") || baseNewType.equals("DOUBLE"))) {
+      if ((baseExistingType.equals("REAL") || baseExistingType.equals("FLOAT")
+          || baseExistingType.equals("DOUBLE")) && (baseNewType.equals("REAL")
+          || baseNewType.equals("FLOAT") || baseNewType.equals("DOUBLE"))) {
         return true;
       }
 
@@ -556,15 +568,18 @@ public class TableManager {
     }
 
     if (databaseType == DatabaseType.MYSQL) {
-      if ((baseExistingType.equals("INT") || baseExistingType.equals("BIGINT")) && (baseNewType.equals("INT") || baseNewType.equals("BIGINT"))) {
+      if ((baseExistingType.equals("INT") || baseExistingType.equals("BIGINT")) && (
+          baseNewType.equals("INT") || baseNewType.equals("BIGINT"))) {
         return true;
       }
 
-      if ((baseExistingType.equals("FLOAT") || baseExistingType.equals("DOUBLE")) && (baseNewType.equals("FLOAT") || baseNewType.equals("DOUBLE"))) {
+      if ((baseExistingType.equals("FLOAT") || baseExistingType.equals("DOUBLE")) && (
+          baseNewType.equals("FLOAT") || baseNewType.equals("DOUBLE"))) {
         return true;
       }
 
-      if ((baseExistingType.equals("VARCHAR") || baseExistingType.equals("TEXT")) && (baseNewType.equals("VARCHAR") || baseNewType.equals("TEXT"))) {
+      if ((baseExistingType.equals("VARCHAR") || baseExistingType.equals("TEXT")) && (
+          baseNewType.equals("VARCHAR") || baseNewType.equals("TEXT"))) {
         return true;
       }
     }
@@ -607,16 +622,16 @@ public class TableManager {
       } else {
         return "VARCHAR(255)";
       }
-    }
-
-    else if (databaseType == DatabaseType.SQLLITE) {
+    } else if (databaseType == DatabaseType.SQLLITE) {
       if (javaType == String.class) {
         return "TEXT";
-      } else if (javaType == int.class || javaType == Integer.class || javaType == long.class || javaType == Long.class) {
+      } else if (javaType == int.class || javaType == Integer.class || javaType == long.class
+          || javaType == Long.class) {
         return "INTEGER";
       } else if (javaType == boolean.class || javaType == Boolean.class) {
         return "INTEGER";
-      } else if (javaType == double.class || javaType == Double.class || javaType == float.class || javaType == Float.class) {
+      } else if (javaType == double.class || javaType == Double.class || javaType == float.class
+          || javaType == Float.class) {
         return "REAL";
       } else if (javaType == java.util.Date.class || javaType == java.sql.Date.class) {
         return "TEXT";

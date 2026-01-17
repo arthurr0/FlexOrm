@@ -10,10 +10,10 @@ import java.lang.annotation.Target;
 public @interface OrmOneToMany {
 
   Class<?> targetEntity();
-  
+
   String mappedBy() default "";
-  
+
   FetchType fetch() default FetchType.LAZY;
-  
+
   boolean cascade() default false;
 }

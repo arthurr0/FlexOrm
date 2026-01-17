@@ -1,13 +1,12 @@
 package pl.minecodes.orm.entity;
 
+import java.util.ArrayList;
+import java.util.List;
 import pl.minecodes.orm.annotation.FetchType;
 import pl.minecodes.orm.annotation.OrmEntity;
 import pl.minecodes.orm.annotation.OrmEntityId;
 import pl.minecodes.orm.annotation.OrmField;
 import pl.minecodes.orm.annotation.OrmOneToMany;
-
-import java.util.ArrayList;
-import java.util.List;
 
 @OrmEntity(table = "authors")
 public class AuthorEntity {

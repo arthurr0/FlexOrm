@@ -1,10 +1,12 @@
 package pl.minecodes.orm.entity;
 
+import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import pl.minecodes.orm.FlexOrm;
-import pl.minecodes.orm.annotation.FetchType;
 import pl.minecodes.orm.annotation.OrmEntity;
 import pl.minecodes.orm.annotation.OrmEntityId;
 import pl.minecodes.orm.annotation.OrmField;
@@ -15,16 +17,12 @@ import pl.minecodes.orm.annotation.OrmOneToOne;
 import pl.minecodes.orm.annotation.OrmTransient;
 import pl.minecodes.orm.exception.ObjectIsNullException;
 import pl.minecodes.orm.exception.ObjectRequiredAnnotationsException;
-import pl.minecodes.orm.relation.RelationInfo;
-import pl.minecodes.orm.relation.RelationType;
-import pl.minecodes.orm.validation.EntityValidator;
-
-import java.lang.reflect.Field;
-import java.util.HashMap;
-import java.util.Map;
 import pl.minecodes.orm.query.Operator;
 import pl.minecodes.orm.query.Query;
+import pl.minecodes.orm.relation.RelationInfo;
+import pl.minecodes.orm.relation.RelationType;
 import pl.minecodes.orm.table.TableMetadata;
+import pl.minecodes.orm.validation.EntityValidator;
 
 public abstract class BaseEntityRepository<T, ID> implements EntityRepository<T, ID> {
 
@@ -111,7 +109,8 @@ public abstract class BaseEntityRepository<T, ID> implements EntityRepository<T,
   }
 
   @Override
-  public <R> R executeRawQuery(String rawQuery, QueryResultMapper<R> mapper, Consumer<Exception> errorHandler) {
+  public <R> R executeRawQuery(String rawQuery, QueryResultMapper<R> mapper,
+      Consumer<Exception> errorHandler) {
     try {
       Object result = executeRawQueryInternal(rawQuery);
       return mapper.map(result);
@@ -143,7 +142,8 @@ public abstract class BaseEntityRepository<T, ID> implements EntityRepository<T,
     }
 
     if (!objectClass.isAnnotationPresent(OrmEntity.class)) {
-      throw new ObjectRequiredAnnotationsException("Provided entity class is not annotated with @OrmEntity!");
+      throw new ObjectRequiredAnnotationsException(
+          "Provided entity class is not annotated with @OrmEntity!");
     }
   }
 
@@ -153,7 +153,8 @@ public abstract class BaseEntityRepository<T, ID> implements EntityRepository<T,
 
   protected TableMetadata extractTableMetadata(Class<?> objectClass) {
     OrmEntity ormEntity = objectClass.getAnnotation(OrmEntity.class);
-    String tableName = ormEntity.table().isEmpty() ? objectClass.getSimpleName().toLowerCase() : ormEntity.table();
+    String tableName =
+        ormEntity.table().isEmpty() ? objectClass.getSimpleName().toLowerCase() : ormEntity.table();
 
     Field idField = null;
     Map<String, Field> columnFields = new HashMap<>();
@@ -196,7 +197,8 @@ public abstract class BaseEntityRepository<T, ID> implements EntityRepository<T,
     }
 
     if (idField == null) {
-      throw new ObjectRequiredAnnotationsException("Class " + objectClass.getName() + " does not have a field annotated with @OrmEntityId");
+      throw new ObjectRequiredAnnotationsException(
+          "Class " + objectClass.getName() + " does not have a field annotated with @OrmEntityId");
     }
 
     return new TableMetadata(tableName, idField, columnFields, fieldColumnNames, relations);
@@ -306,7 +308,9 @@ public abstract class BaseEntityRepository<T, ID> implements EntityRepository<T,
   }
 
   protected abstract void beginTransactionInternal();
+
   protected abstract void commitTransactionInternal();
+
   protected abstract void rollbackTransactionInternal();
 
   protected abstract boolean existsById(ID id);

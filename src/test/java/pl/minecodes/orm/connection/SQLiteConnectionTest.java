@@ -41,7 +41,6 @@ class SQLiteConnectionTest {
         dataSource.close();
       }
     } catch (IllegalStateException e) {
-      //Ignore
     }
   }
 

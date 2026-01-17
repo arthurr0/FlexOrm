@@ -1,20 +1,14 @@
 package pl.minecodes.orm.relation;
 
-import pl.minecodes.orm.FlexOrm;
-import pl.minecodes.orm.annotation.OrmEntity;
-import pl.minecodes.orm.annotation.OrmEntityId;
-import pl.minecodes.orm.table.TableMetadata;
-
-import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import pl.minecodes.orm.FlexOrm;
+import pl.minecodes.orm.table.TableMetadata;
 
 public class CascadeHandler {
 
@@ -97,7 +91,8 @@ public class CascadeHandler {
 
             deleteFromJoinTable(joinTable, joinColumn, entityId, connection);
           }
-          default -> {}
+          default -> {
+          }
         }
       } catch (IllegalAccessException e) {
         throw new RuntimeException("Error accessing relation field for cascade delete", e);
@@ -128,7 +123,8 @@ public class CascadeHandler {
     }
   }
 
-  private void deleteFromJoinTable(String joinTable, String joinColumn, Object entityId, Connection connection) {
+  private void deleteFromJoinTable(String joinTable, String joinColumn, Object entityId,
+      Connection connection) {
     try {
       String sql = "DELETE FROM " + joinTable + " WHERE " + joinColumn + " = ?";
       try (PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -148,11 +144,10 @@ public class CascadeHandler {
 
       try {
         Object relatedCollection = relation.field().get(entity);
-        if (relatedCollection == null || !(relatedCollection instanceof Collection<?>)) {
+        if (relatedCollection == null || !(relatedCollection instanceof Collection<?> collection)) {
           continue;
         }
 
-        Collection<?> collection = (Collection<?>) relatedCollection;
         if (collection.isEmpty()) {
           continue;
         }
@@ -179,7 +174,8 @@ public class CascadeHandler {
         for (Object related : collection) {
           Object relatedId = targetMetadata.idField().get(related);
           if (relatedId != null) {
-            insertIntoJoinTable(joinTable, joinColumn, inverseJoinColumn, entityId, relatedId, connection);
+            insertIntoJoinTable(joinTable, joinColumn, inverseJoinColumn, entityId, relatedId,
+                connection);
           }
         }
       } catch (IllegalAccessException e) {
@@ -191,7 +187,8 @@ public class CascadeHandler {
   private void insertIntoJoinTable(String joinTable, String joinColumn, String inverseJoinColumn,
       Object entityId, Object relatedId, Connection connection) {
     try {
-      String sql = "INSERT INTO " + joinTable + " (" + joinColumn + ", " + inverseJoinColumn + ") VALUES (?, ?)";
+      String sql = "INSERT INTO " + joinTable + " (" + joinColumn + ", " + inverseJoinColumn
+          + ") VALUES (?, ?)";
       try (PreparedStatement stmt = connection.prepareStatement(sql)) {
         stmt.setObject(1, entityId);
         stmt.setObject(2, relatedId);

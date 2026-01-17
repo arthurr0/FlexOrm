@@ -1,12 +1,11 @@
 package pl.minecodes.orm.validation;
 
-import pl.minecodes.orm.annotation.OrmField;
-import pl.minecodes.orm.annotation.OrmNotNull;
-import pl.minecodes.orm.exception.ValidationException;
-
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import pl.minecodes.orm.annotation.OrmField;
+import pl.minecodes.orm.annotation.OrmNotNull;
+import pl.minecodes.orm.exception.ValidationException;
 
 public class EntityValidator {
 
@@ -40,7 +39,8 @@ public class EntityValidator {
 
           if (value instanceof String strValue) {
             if (strValue.length() > ormField.length()) {
-              errors.add(field.getName() + ": String exceeds maximum length of " + ormField.length());
+              errors.add(
+                  field.getName() + ": String exceeds maximum length of " + ormField.length());
             }
           }
         }

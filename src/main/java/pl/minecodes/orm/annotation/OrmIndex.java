@@ -8,13 +8,8 @@ import java.lang.annotation.Target;
 @Target(ElementType.FIELD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface OrmIndex {
-  /**
-   * Nazwa indeksu.
-   */
+
   String name() default "";
-  
-  /**
-   * Czy indeks ma być unikalny.
-   */
+
   boolean unique() default false;
 }

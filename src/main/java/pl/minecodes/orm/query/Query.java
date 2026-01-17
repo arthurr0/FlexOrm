@@ -1,28 +1,24 @@
 package pl.minecodes.orm.query;
 
+import com.mongodb.client.FindIterable;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.MongoDatabase;
+import com.zaxxer.hikari.HikariDataSource;
 import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-
-import com.mongodb.client.FindIterable;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
-import com.zaxxer.hikari.HikariDataSource;
 import org.bson.Document;
 import org.bson.conversions.Bson;
-
 import pl.minecodes.orm.DatabaseType;
 import pl.minecodes.orm.FlexOrm;
-import pl.minecodes.orm.entity.BaseEntityRepository;
 import pl.minecodes.orm.table.TableMetadata;
 
 public class Query<T> {
@@ -76,7 +72,6 @@ public class Query<T> {
   }
 
   public Query<T> orderBy(String field, boolean ascending) {
-    // Sprawdź, czy pole istnieje w metadanych
     String columnName = getActualColumnName(field);
     orderBy.add(columnName + (ascending ? " ASC" : " DESC"));
     return this;
@@ -226,21 +221,19 @@ public class Query<T> {
       QueryCondition condition = conditions.get(i);
 
       if (i > 0) {
-        sql.append(condition.getLogicalOperator() == LogicalOperator.AND ? " AND " : " OR ");
+        sql.append(condition.logicalOperator() == LogicalOperator.AND ? " AND " : " OR ");
       }
 
-      // Sprawdź czy pole istnieje w metadanych
-      String columnName = getActualColumnName(condition.getField());
+      String columnName = getActualColumnName(condition.field());
       sql.append(columnName);
 
-      switch (condition.getOperator()) {
+      switch (condition.operator()) {
         case EQUALS -> {
-          if (condition.getValue() == null) {
+          if (condition.value() == null) {
             sql.append(" IS NULL");
-          } else if (condition.getValue() instanceof Boolean) {
-            // Specjalna obsługa dla boolean w SQLite
+          } else if (condition.value() instanceof Boolean) {
             if (orm.getDatabaseType() == DatabaseType.SQLLITE) {
-              boolean boolValue = (Boolean) condition.getValue();
+              boolean boolValue = (Boolean) condition.value();
               sql.append(boolValue ? " = 1" : " = 0");
             } else {
               sql.append(" = ?");
@@ -250,12 +243,11 @@ public class Query<T> {
           }
         }
         case NOT_EQUALS -> {
-          if (condition.getValue() == null) {
+          if (condition.value() == null) {
             sql.append(" IS NOT NULL");
-          } else if (condition.getValue() instanceof Boolean) {
-            // Specjalna obsługa dla boolean w SQLite
+          } else if (condition.value() instanceof Boolean) {
             if (orm.getDatabaseType() == DatabaseType.SQLLITE) {
-              boolean boolValue = (Boolean) condition.getValue();
+              boolean boolValue = (Boolean) condition.value();
               sql.append(boolValue ? " != 1" : " != 0");
             } else {
               sql.append(" != ?");
@@ -270,9 +262,9 @@ public class Query<T> {
         case LESS_THAN_OR_EQUALS -> sql.append(" <= ?");
         case LIKE -> sql.append(" LIKE ?");
         case IN -> {
-          List<?> values = (List<?>) condition.getValue();
+          List<?> values = (List<?>) condition.value();
           if (values.isEmpty()) {
-            sql.append(" IN (NULL)"); // Puste IN zwraca zawsze false
+            sql.append(" IN (NULL)");
           } else {
             String placeholders = values.stream().map(v -> "?").collect(Collectors.joining(", "));
             sql.append(" IN (").append(placeholders).append(")");
@@ -288,26 +280,32 @@ public class Query<T> {
     Document query = new Document();
 
     for (QueryCondition condition : conditions) {
-      String columnName = getActualColumnName(condition.getField());
+      String columnName = getActualColumnName(condition.field());
       Document conditionDoc = new Document();
 
-      switch (condition.getOperator()) {
-        case EQUALS -> query.append(columnName, condition.getValue());
-        case NOT_EQUALS -> conditionDoc.append("$ne", condition.getValue());
-        case GREATER_THAN -> conditionDoc.append("$gt", condition.getValue());
-        case LESS_THAN -> conditionDoc.append("$lt", condition.getValue());
-        case GREATER_THAN_OR_EQUALS -> conditionDoc.append("$gte", condition.getValue());
-        case LESS_THAN_OR_EQUALS -> conditionDoc.append("$lte", condition.getValue());
+      switch (condition.operator()) {
+        case EQUALS -> query.append(columnName, condition.value());
+        case NOT_EQUALS -> conditionDoc.append("$ne", condition.value());
+        case GREATER_THAN -> conditionDoc.append("$gt", condition.value());
+        case LESS_THAN -> conditionDoc.append("$lt", condition.value());
+        case GREATER_THAN_OR_EQUALS -> conditionDoc.append("$gte", condition.value());
+        case LESS_THAN_OR_EQUALS -> conditionDoc.append("$lte", condition.value());
         case LIKE -> {
-          String pattern = condition.getValue().toString();
-          if (!pattern.startsWith("%")) pattern = "^" + pattern;
-          else pattern = pattern.substring(1);
-          if (!pattern.endsWith("%")) pattern = pattern + "$";
-          else pattern = pattern.substring(0, pattern.length() - 1);
+          String pattern = condition.value().toString();
+          if (!pattern.startsWith("%")) {
+            pattern = "^" + pattern;
+          } else {
+            pattern = pattern.substring(1);
+          }
+          if (!pattern.endsWith("%")) {
+            pattern = pattern + "$";
+          } else {
+            pattern = pattern.substring(0, pattern.length() - 1);
+          }
           pattern = pattern.replace("%", ".*");
           conditionDoc.append("$regex", pattern).append("$options", "i");
         }
-        case IN -> conditionDoc.append("$in", condition.getValue());
+        case IN -> conditionDoc.append("$in", condition.value());
         case IS_NULL -> conditionDoc.append("$exists", false);
         case IS_NOT_NULL -> conditionDoc.append("$exists", true);
       }
@@ -320,7 +318,8 @@ public class Query<T> {
     return query;
   }
 
-  private PreparedStatement prepareStatement(Connection connection, String sql) throws SQLException {
+  private PreparedStatement prepareStatement(Connection connection, String sql)
+      throws SQLException {
     PreparedStatement statement = connection.prepareStatement(sql);
 
     if (customSql != null) {
@@ -329,7 +328,6 @@ public class Query<T> {
         String name = entry.getKey();
         Object value = entry.getValue();
 
-        // Prosta implementacja podstawiania parametrów nazwanych w SQL
         if (sql.contains(":" + name)) {
           String updatedSql = sql.replace(":" + name, "?");
           sql = updatedSql;
@@ -342,42 +340,42 @@ public class Query<T> {
 
     int paramIndex = 1;
     for (QueryCondition condition : conditions) {
-      // Pomiń warunki, które nie wymagają parametrów
-      if (condition.getOperator() == Operator.IS_NULL ||
-          condition.getOperator() == Operator.IS_NOT_NULL) {
+      if (condition.operator() == Operator.IS_NULL ||
+          condition.operator() == Operator.IS_NOT_NULL) {
         continue;
       }
 
-      // Pomiń wartości null i boolean w SQLite, które są już obsłużone w SQL
-      if ((condition.getOperator() == Operator.EQUALS || condition.getOperator() == Operator.NOT_EQUALS) &&
-          (condition.getValue() == null ||
-              (condition.getValue() instanceof Boolean && orm.getDatabaseType() == DatabaseType.SQLLITE))) {
+      if ((condition.operator() == Operator.EQUALS
+          || condition.operator() == Operator.NOT_EQUALS) &&
+          (condition.value() == null ||
+              (condition.value() instanceof Boolean
+                  && orm.getDatabaseType() == DatabaseType.SQLLITE))) {
         continue;
       }
 
-      if (condition.getOperator() == Operator.IN) {
-        List<?> values = (List<?>) condition.getValue();
+      if (condition.operator() == Operator.IN) {
+        List<?> values = (List<?>) condition.value();
         if (!values.isEmpty()) {
           for (Object value : values) {
             setStatementParameter(statement, paramIndex++, value);
           }
         }
-      } else if (condition.getOperator() == Operator.LIKE) {
-        // Specjalna obsługa dla LIKE - dodajemy znaki % jeśli ich nie ma
-        String value = condition.getValue().toString();
+      } else if (condition.operator() == Operator.LIKE) {
+        String value = condition.value().toString();
         if (!value.contains("%")) {
           value = "%" + value + "%";
         }
         statement.setString(paramIndex++, value);
       } else {
-        setStatementParameter(statement, paramIndex++, condition.getValue());
+        setStatementParameter(statement, paramIndex++, condition.value());
       }
     }
 
     return statement;
   }
 
-  private void setStatementParameter(PreparedStatement statement, int index, Object value) throws SQLException {
+  private void setStatementParameter(PreparedStatement statement, int index, Object value)
+      throws SQLException {
     if (value instanceof String) {
       statement.setString(index, (String) value);
     } else if (value instanceof Integer) {
@@ -397,7 +395,7 @@ public class Query<T> {
 
   private List<T> mapResultSetToEntities(ResultSet resultSet) throws SQLException {
     List<T> results = new ArrayList<>();
-    Map<Object, T> uniqueResults = new HashMap<>(); // Dla unikania duplikatów
+    Map<Object, T> uniqueResults = new HashMap<>();
 
     while (resultSet.next()) {
       try {
@@ -423,7 +421,6 @@ public class Query<T> {
           }
         }
 
-        // Dodaj tylko unikalne wyniki na podstawie ID
         if (idValue != null) {
           if (!uniqueResults.containsKey(idValue)) {
             uniqueResults.put(idValue, instance);
@@ -436,7 +433,6 @@ public class Query<T> {
       }
     }
 
-    // Dodaj wszystkie unikalne wyniki
     results.addAll(uniqueResults.values());
 
     return results;
@@ -453,7 +449,6 @@ public class Query<T> {
         try {
           Object value = document.get(columnName);
           if (value != null) {
-            // Konwersja typów dla MongoDB
             if (field.getType() == Boolean.class || field.getType() == boolean.class) {
               if (value instanceof Integer) {
                 value = ((Integer) value) == 1;
@@ -476,29 +471,25 @@ public class Query<T> {
     }
   }
 
-  // Metoda pomocnicza do znalezienia rzeczywistej nazwy kolumny
   private String getActualColumnName(String fieldName) {
-    // Sprawdź, czy istnieje mapowanie dla tego pola
     if (metadata.fieldColumnNames().containsKey(fieldName)) {
       return metadata.fieldColumnNames().get(fieldName);
     }
 
-    // Jeśli nie ma mapowania, sprawdź czy istnieje jako nazwa kolumny
     for (String columnName : metadata.columnFields().keySet()) {
       if (columnName.equals(fieldName)) {
         return columnName;
       }
     }
 
-    // Jeśli nie znaleziono, zwróć oryginalną nazwę
     return fieldName;
   }
 
-  public static <T> QueryBuilder<T> builder(FlexOrm orm, Class<T> entityClass, TableMetadata metadata) {
+  public static <T> QueryBuilder<T> builder(FlexOrm orm, Class<T> entityClass,
+      TableMetadata metadata) {
     return new QueryBuilder<>(orm, entityClass, metadata);
   }
 
-  // Metoda pomocnicza do wykonywania zapytania count()
   public long count() {
     return switch (orm.getDatabaseType()) {
       case MYSQL, SQLLITE -> countRelational();
@@ -550,9 +541,9 @@ public class Query<T> {
     return collection.countDocuments(filter);
   }
 
-  // Metoda pomocnicza do wykonywania zapytań na surowym SQL
   public void executeRawUpdate(String sql, Consumer<Exception> errorHandler) {
-    if (orm.getDatabaseType() == DatabaseType.MYSQL || orm.getDatabaseType() == DatabaseType.SQLLITE) {
+    if (orm.getDatabaseType() == DatabaseType.MYSQL
+        || orm.getDatabaseType() == DatabaseType.SQLLITE) {
       try {
         HikariDataSource dataSource = (HikariDataSource) orm.getConnection().getConnection();
         try (Connection connection = dataSource.getConnection()) {
@@ -578,7 +569,8 @@ public class Query<T> {
         }
       }
     } else {
-      throw new UnsupportedOperationException("Raw SQL updates are only supported for relational databases");
+      throw new UnsupportedOperationException(
+          "Raw SQL updates are only supported for relational databases");
     }
   }
 

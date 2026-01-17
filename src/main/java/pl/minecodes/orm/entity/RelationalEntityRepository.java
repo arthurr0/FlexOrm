@@ -2,10 +2,6 @@ package pl.minecodes.orm.entity;
 
 import com.zaxxer.hikari.HikariDataSource;
 import java.lang.reflect.Field;
-import pl.minecodes.orm.FlexOrm;
-import pl.minecodes.orm.relation.CascadeHandler;
-import pl.minecodes.orm.relation.RelationLoader;
-
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -13,6 +9,9 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import pl.minecodes.orm.FlexOrm;
+import pl.minecodes.orm.relation.CascadeHandler;
+import pl.minecodes.orm.relation.RelationLoader;
 import pl.minecodes.orm.table.TableMetadata;
 
 public abstract class RelationalEntityRepository<T, ID> extends BaseEntityRepository<T, ID> {
@@ -272,7 +271,8 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
 
         sql.append(") VALUES (").append(placeholders).append(")");
 
-        try (PreparedStatement statement = connection.prepareStatement(sql.toString(), java.sql.Statement.RETURN_GENERATED_KEYS)) {
+        try (PreparedStatement statement = connection.prepareStatement(sql.toString(),
+            java.sql.Statement.RETURN_GENERATED_KEYS)) {
           for (int i = 0; i < values.size(); i++) {
             statement.setObject(i + 1, values.get(i));
           }
@@ -474,7 +474,8 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
     }
   }
 
-  private void insertIntoDatabaseInternal(Object entity, TableMetadata metadata, Connection connection) {
+  private void insertIntoDatabaseInternal(Object entity, TableMetadata metadata,
+      Connection connection) {
     try {
       StringBuilder sql = new StringBuilder();
       sql.append("INSERT INTO ").append(metadata.tableName()).append(" (");
@@ -510,7 +511,8 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
     }
   }
 
-  private void updateInDatabaseInternal(Object entity, TableMetadata metadata, Connection connection) {
+  private void updateInDatabaseInternal(Object entity, TableMetadata metadata,
+      Connection connection) {
     try {
       StringBuilder sql = new StringBuilder();
       sql.append("UPDATE ").append(metadata.tableName()).append(" SET ");

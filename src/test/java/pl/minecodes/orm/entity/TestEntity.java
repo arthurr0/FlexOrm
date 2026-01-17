@@ -1,5 +1,6 @@
 package pl.minecodes.orm.entity;
 
+import java.util.Objects;
 import pl.minecodes.orm.annotation.OrmEntity;
 import pl.minecodes.orm.annotation.OrmEntityId;
 import pl.minecodes.orm.annotation.OrmField;
@@ -62,15 +63,25 @@ public class TestEntity {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
 
     TestEntity that = (TestEntity) o;
 
-    if (age != that.age) return false;
-    if (active != that.active) return false;
-    if (id != null ? !id.equals(that.id) : that.id != null) return false;
-    return name != null ? name.equals(that.name) : that.name == null;
+    if (age != that.age) {
+      return false;
+    }
+    if (active != that.active) {
+      return false;
+    }
+    if (!Objects.equals(id, that.id)) {
+      return false;
+    }
+    return Objects.equals(name, that.name);
   }
 
   @Override

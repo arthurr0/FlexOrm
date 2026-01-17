@@ -1,6 +1,7 @@
 package pl.minecodes.orm.exception;
 
 public class ConnectionException extends OrmException {
+
   public ConnectionException(String message) {
     super(message);
   }

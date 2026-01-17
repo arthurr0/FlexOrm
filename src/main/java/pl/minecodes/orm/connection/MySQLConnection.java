@@ -35,7 +35,8 @@ public class MySQLConnection implements Connection<HikariDataSource> {
     HikariConfig hikariConfig = new HikariConfig();
     hikariConfig.setDriverClassName("com.mysql.cj.jdbc.Driver");
 
-    hikariConfig.setJdbcUrl("jdbc:mysql://" + this.connectionCredentials.hostname() + ":" + this.connectionCredentials.port() + "/" + this.connectionCredentials.database());
+    hikariConfig.setJdbcUrl("jdbc:mysql://" + this.connectionCredentials.hostname() + ":"
+        + this.connectionCredentials.port() + "/" + this.connectionCredentials.database());
     hikariConfig.setUsername(this.connectionCredentials.username());
     hikariConfig.setPassword(this.connectionCredentials.password());
 
