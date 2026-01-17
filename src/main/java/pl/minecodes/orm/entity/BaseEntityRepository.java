@@ -1,10 +1,12 @@
 package pl.minecodes.orm.entity;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import pl.minecodes.orm.FlexOrm;
 import pl.minecodes.orm.annotation.OrmEntity;
@@ -29,6 +31,7 @@ public abstract class BaseEntityRepository<T, ID> implements EntityRepository<T,
   protected final Class<T> entityClass;
   protected final FlexOrm orm;
   protected final Map<Class<?>, TableMetadata> metadataCache = new HashMap<>();
+  protected static final Map<Class<?>, Constructor<?>> constructorCache = new ConcurrentHashMap<>();
   protected boolean inTransaction = false;
 
   protected BaseEntityRepository(FlexOrm orm, Class<T> entityClass) {
@@ -278,6 +281,19 @@ public abstract class BaseEntityRepository<T, ID> implements EntityRepository<T,
 
   protected String getColumnNameForField(Field field, TableMetadata metadata) {
     return metadata.fieldColumnNames().getOrDefault(field.getName(), field.getName());
+  }
+
+  @SuppressWarnings("unchecked")
+  protected <E> Constructor<E> getCachedConstructor(Class<E> clazz) {
+    return (Constructor<E>) constructorCache.computeIfAbsent(clazz, cls -> {
+      try {
+        Constructor<E> constructor = (Constructor<E>) cls.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        return constructor;
+      } catch (NoSuchMethodException e) {
+        throw new RuntimeException("No default constructor found for " + cls.getName(), e);
+      }
+    });
   }
 
   @Override

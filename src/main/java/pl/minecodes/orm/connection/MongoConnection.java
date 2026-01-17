@@ -12,6 +12,7 @@ public class MongoConnection implements Connection<MongoDatabase> {
 
   private final ConnectionCredentials connectionCredentials;
 
+  private MongoClient mongoClient;
   private MongoDatabase mongoDatabase;
 
   public MongoConnection(ConnectionCredentials connectionCredentials) {
@@ -42,8 +43,8 @@ public class MongoConnection implements Connection<MongoDatabase> {
       settingsBuilder.credential(credential);
     }
 
-    MongoClient mongoClient = MongoClients.create(settingsBuilder.build());
-    this.mongoDatabase = mongoClient.getDatabase(this.connectionCredentials.database());
+    this.mongoClient = MongoClients.create(settingsBuilder.build());
+    this.mongoDatabase = this.mongoClient.getDatabase(this.connectionCredentials.database());
   }
 
   @Override
@@ -53,5 +54,14 @@ public class MongoConnection implements Connection<MongoDatabase> {
     }
 
     return this.mongoDatabase;
+  }
+
+  @Override
+  public void close() {
+    if (this.mongoClient != null) {
+      this.mongoClient.close();
+      this.mongoClient = null;
+      this.mongoDatabase = null;
+    }
   }
 }

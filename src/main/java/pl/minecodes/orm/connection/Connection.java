@@ -6,4 +6,6 @@ public interface Connection<T> {
 
   T getConnection();
 
+  void close();
+
 }

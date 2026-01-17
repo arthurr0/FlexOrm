@@ -30,6 +30,14 @@ public class SQLiteConnection implements Connection<HikariDataSource> {
     return this.hikariDataSource;
   }
 
+  @Override
+  public void close() {
+    if (this.hikariDataSource != null && !this.hikariDataSource.isClosed()) {
+      this.hikariDataSource.close();
+      this.hikariDataSource = null;
+    }
+  }
+
   private HikariConfig getHikariConfig() {
     HikariConfig hikariConfig = new HikariConfig();
     hikariConfig.setDriverClassName("org.sqlite.JDBC");

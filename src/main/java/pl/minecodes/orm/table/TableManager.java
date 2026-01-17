@@ -21,6 +21,7 @@ import pl.minecodes.orm.annotation.OrmEntityId;
 import pl.minecodes.orm.annotation.OrmField;
 import pl.minecodes.orm.annotation.OrmIndex;
 import pl.minecodes.orm.exception.ObjectRequiredAnnotationsException;
+import pl.minecodes.orm.util.SqlSanitizer;
 
 public class TableManager {
 
@@ -120,10 +121,11 @@ public class TableManager {
 
   private <T> void createMySQLTable(Class<T> entityClass, String tableName) {
     HikariDataSource dataSource = (HikariDataSource) orm.getConnection().getConnection();
+    String sanitizedTableName = SqlSanitizer.sanitizeTableName(tableName);
 
     try (Connection connection = dataSource.getConnection()) {
       StringBuilder sql = new StringBuilder();
-      sql.append("CREATE TABLE IF NOT EXISTS ").append(tableName).append(" (\n");
+      sql.append("CREATE TABLE IF NOT EXISTS ").append(sanitizedTableName).append(" (\n");
 
       List<String> columns = new ArrayList<>();
       Field idField = null;
@@ -161,26 +163,27 @@ public class TableManager {
 
   private <T> void updateMySQLTable(Class<T> entityClass, String tableName) {
     HikariDataSource dataSource = (HikariDataSource) orm.getConnection().getConnection();
+    String sanitizedTableName = SqlSanitizer.sanitizeTableName(tableName);
 
     try (Connection connection = dataSource.getConnection()) {
       Map<String, String> existingColumns = getExistingColumns(connection, tableName);
       Map<String, ColumnInfo> entityColumns = getEntityColumns(entityClass, DatabaseType.MYSQL);
 
       for (Map.Entry<String, ColumnInfo> entry : entityColumns.entrySet()) {
-        String columnName = entry.getKey();
+        String columnName = SqlSanitizer.sanitizeColumnName(entry.getKey());
         ColumnInfo columnInfo = entry.getValue();
 
-        if (!existingColumns.containsKey(columnName)) {
+        if (!existingColumns.containsKey(entry.getKey())) {
           String alterSql =
-              "ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + columnInfo.sqlType;
+              "ALTER TABLE " + sanitizedTableName + " ADD COLUMN " + columnName + " " + columnInfo.sqlType;
 
           try (Statement statement = connection.createStatement()) {
             statement.execute(alterSql);
           }
         } else {
-          String existingType = existingColumns.get(columnName);
+          String existingType = existingColumns.get(entry.getKey());
           if (!isCompatibleType(existingType, columnInfo.sqlType, DatabaseType.MYSQL)) {
-            String alterSql = "ALTER TABLE " + tableName + " MODIFY COLUMN " + columnName + " "
+            String alterSql = "ALTER TABLE " + sanitizedTableName + " MODIFY COLUMN " + columnName + " "
                 + columnInfo.sqlType;
 
             try (Statement statement = connection.createStatement()) {
@@ -191,9 +194,10 @@ public class TableManager {
       }
 
       if (shouldDropUnusedColumns()) {
-        for (String columnName : existingColumns.keySet()) {
-          if (!entityColumns.containsKey(columnName)) {
-            String alterSql = "ALTER TABLE " + tableName + " DROP COLUMN " + columnName;
+        for (String existingColumnName : existingColumns.keySet()) {
+          if (!entityColumns.containsKey(existingColumnName)) {
+            String columnName = SqlSanitizer.sanitizeColumnName(existingColumnName);
+            String alterSql = "ALTER TABLE " + sanitizedTableName + " DROP COLUMN " + columnName;
 
             try (Statement statement = connection.createStatement()) {
               statement.execute(alterSql);
@@ -208,10 +212,11 @@ public class TableManager {
 
   private <T> void createSQLiteTable(Class<T> entityClass, String tableName) {
     HikariDataSource dataSource = (HikariDataSource) orm.getConnection().getConnection();
+    String sanitizedTableName = SqlSanitizer.sanitizeTableName(tableName);
 
     try (Connection connection = dataSource.getConnection()) {
       StringBuilder sql = new StringBuilder();
-      sql.append("CREATE TABLE IF NOT EXISTS ").append(tableName).append(" (\n");
+      sql.append("CREATE TABLE IF NOT EXISTS ").append(sanitizedTableName).append(" (\n");
 
       List<String> columns = new ArrayList<>();
       Field idField = null;
@@ -249,6 +254,7 @@ public class TableManager {
 
   private <T> void updateSQLiteTable(Class<T> entityClass, String tableName) {
     HikariDataSource dataSource = (HikariDataSource) orm.getConnection().getConnection();
+    String sanitizedTableName = SqlSanitizer.sanitizeTableName(tableName);
 
     try (Connection connection = dataSource.getConnection()) {
       Map<String, String> existingColumns = getExistingColumns(connection, tableName);
@@ -291,14 +297,15 @@ public class TableManager {
         connection.setAutoCommit(false);
 
         try {
-          String tempTableName = tableName + "_new";
+          String tempTableName = SqlSanitizer.sanitizeTableName(tableName + "_new");
 
           StringBuilder createSql = new StringBuilder();
           createSql.append("CREATE TABLE ").append(tempTableName).append(" (\n");
 
           List<String> columns = new ArrayList<>();
           for (Map.Entry<String, ColumnInfo> entry : entityColumns.entrySet()) {
-            columns.add(entry.getKey() + " " + entry.getValue().sqlType);
+            String columnName = SqlSanitizer.sanitizeColumnName(entry.getKey());
+            columns.add(columnName + " " + entry.getValue().sqlType);
           }
 
           createSql.append(String.join(",\n", columns));
@@ -312,12 +319,16 @@ public class TableManager {
           commonColumns.retainAll(entityColumns.keySet());
 
           if (!commonColumns.isEmpty()) {
+            List<String> sanitizedCommonColumns = commonColumns.stream()
+                .map(SqlSanitizer::sanitizeColumnName)
+                .toList();
+
             StringBuilder insertSql = new StringBuilder();
             insertSql.append("INSERT INTO ").append(tempTableName).append(" (");
-            insertSql.append(String.join(", ", commonColumns));
+            insertSql.append(String.join(", ", sanitizedCommonColumns));
             insertSql.append(") SELECT ");
-            insertSql.append(String.join(", ", commonColumns));
-            insertSql.append(" FROM ").append(tableName);
+            insertSql.append(String.join(", ", sanitizedCommonColumns));
+            insertSql.append(" FROM ").append(sanitizedTableName);
 
             try (Statement statement = connection.createStatement()) {
               statement.execute(insertSql.toString());
@@ -325,11 +336,11 @@ public class TableManager {
           }
 
           try (Statement statement = connection.createStatement()) {
-            statement.execute("DROP TABLE " + tableName);
+            statement.execute("DROP TABLE " + sanitizedTableName);
           }
 
           try (Statement statement = connection.createStatement()) {
-            statement.execute("ALTER TABLE " + tempTableName + " RENAME TO " + tableName);
+            statement.execute("ALTER TABLE " + tempTableName + " RENAME TO " + sanitizedTableName);
           }
 
           connection.commit();
@@ -352,6 +363,7 @@ public class TableManager {
 
   private <T> void createIndexes(Class<T> entityClass, String tableName) {
     HikariDataSource dataSource = (HikariDataSource) orm.getConnection().getConnection();
+    String sanitizedTableName = SqlSanitizer.sanitizeTableName(tableName);
 
     try (Connection connection = dataSource.getConnection()) {
       for (Field field : entityClass.getDeclaredFields()) {
@@ -360,20 +372,20 @@ public class TableManager {
         }
 
         OrmIndex indexAnnotation = field.getAnnotation(OrmIndex.class);
-        String columnName = getColumnName(field);
+        String columnName = SqlSanitizer.sanitizeColumnName(getColumnName(field));
 
         String indexName = indexAnnotation.name().isEmpty()
-            ? "idx_" + tableName + "_" + columnName
-            : indexAnnotation.name();
+            ? SqlSanitizer.sanitizeIdentifier("idx_" + tableName + "_" + getColumnName(field))
+            : SqlSanitizer.sanitizeIdentifier(indexAnnotation.name());
 
         String indexType = indexAnnotation.unique() ? "UNIQUE INDEX" : "INDEX";
 
         String sql;
         if (orm.getDatabaseType() == DatabaseType.MYSQL) {
-          sql = "CREATE " + indexType + " IF NOT EXISTS " + indexName + " ON " + tableName + " ("
+          sql = "CREATE " + indexType + " IF NOT EXISTS " + indexName + " ON " + sanitizedTableName + " ("
               + columnName + ")";
         } else {
-          sql = "CREATE " + indexType + " IF NOT EXISTS " + indexName + " ON " + tableName + " ("
+          sql = "CREATE " + indexType + " IF NOT EXISTS " + indexName + " ON " + sanitizedTableName + " ("
               + columnName + ")";
         }
 
@@ -391,7 +403,7 @@ public class TableManager {
       return null;
     }
 
-    String columnName = getColumnName(field);
+    String columnName = SqlSanitizer.sanitizeColumnName(getColumnName(field));
     String sqlType = mapJavaTypeToSQLType(field.getType(), databaseType);
 
     StringBuilder definition = new StringBuilder();
@@ -440,13 +452,43 @@ public class TableManager {
 
     if (!defaultValue.isEmpty() && !field.isAnnotationPresent(OrmEntityId.class)) {
       if (field.getType() == String.class) {
-        definition.append(" DEFAULT '").append(defaultValue).append("'");
+        String escapedValue = SqlSanitizer.escapeStringValue(defaultValue);
+        definition.append(" DEFAULT '").append(escapedValue).append("'");
       } else {
-        definition.append(" DEFAULT ").append(defaultValue);
+        String sanitizedDefault = sanitizeDefaultValue(defaultValue, field.getType());
+        definition.append(" DEFAULT ").append(sanitizedDefault);
       }
     }
 
     return definition.toString();
+  }
+
+  private String sanitizeDefaultValue(String defaultValue, Class<?> fieldType) {
+    if (fieldType == int.class || fieldType == Integer.class
+        || fieldType == long.class || fieldType == Long.class) {
+      try {
+        Long.parseLong(defaultValue);
+        return defaultValue;
+      } catch (NumberFormatException e) {
+        throw new IllegalArgumentException("Invalid numeric default value: " + defaultValue);
+      }
+    } else if (fieldType == double.class || fieldType == Double.class
+        || fieldType == float.class || fieldType == Float.class) {
+      try {
+        Double.parseDouble(defaultValue);
+        return defaultValue;
+      } catch (NumberFormatException e) {
+        throw new IllegalArgumentException("Invalid decimal default value: " + defaultValue);
+      }
+    } else if (fieldType == boolean.class || fieldType == Boolean.class) {
+      if ("true".equalsIgnoreCase(defaultValue) || "1".equals(defaultValue)) {
+        return "1";
+      } else if ("false".equalsIgnoreCase(defaultValue) || "0".equals(defaultValue)) {
+        return "0";
+      }
+      throw new IllegalArgumentException("Invalid boolean default value: " + defaultValue);
+    }
+    throw new IllegalArgumentException("Unsupported default value type for: " + fieldType.getName());
   }
 
   private String getColumnName(Field field) {

@@ -20,8 +20,11 @@ import org.bson.conversions.Bson;
 import pl.minecodes.orm.DatabaseType;
 import pl.minecodes.orm.FlexOrm;
 import pl.minecodes.orm.table.TableMetadata;
+import pl.minecodes.orm.util.SqlSanitizer;
 
 public class Query<T> {
+
+  public static final int DEFAULT_QUERY_LIMIT = 1000;
 
   private final FlexOrm orm;
   private final Class<T> entityClass;
@@ -35,6 +38,7 @@ public class Query<T> {
   private String customSql;
   private Document mongoQuery;
   private boolean useDistinct = false;
+  private boolean unlimitedResults = false;
 
   public Query(FlexOrm orm, Class<T> entityClass, TableMetadata metadata) {
     this.orm = orm;
@@ -95,6 +99,7 @@ public class Query<T> {
     return this;
   }
 
+  @Deprecated
   public Query<T> raw(String sql) {
     this.customSql = sql;
     return this;
@@ -112,6 +117,11 @@ public class Query<T> {
 
   public Query<T> distinct() {
     this.useDistinct = true;
+    return this;
+  }
+
+  public Query<T> unlimited() {
+    this.unlimitedResults = true;
     return this;
   }
 
@@ -166,8 +176,9 @@ public class Query<T> {
       findIterable.sort(sort);
     }
 
-    if (limit != null) {
-      findIterable.limit(limit);
+    int effectiveLimit = getEffectiveLimit();
+    if (effectiveLimit > 0) {
+      findIterable.limit(effectiveLimit);
     }
 
     if (offset != null) {
@@ -190,7 +201,7 @@ public class Query<T> {
     if (useDistinct) {
       sql.append("DISTINCT ");
     }
-    sql.append("* FROM ").append(metadata.tableName());
+    sql.append("* FROM ").append(SqlSanitizer.sanitizeTableName(metadata.tableName()));
 
     if (!conditions.isEmpty()) {
       sql.append(" WHERE ");
@@ -205,8 +216,9 @@ public class Query<T> {
       sql.append(" ORDER BY ").append(String.join(", ", orderBy));
     }
 
-    if (limit != null) {
-      sql.append(" LIMIT ").append(limit);
+    int effectiveLimit = getEffectiveLimit();
+    if (effectiveLimit > 0) {
+      sql.append(" LIMIT ").append(effectiveLimit);
     }
 
     if (offset != null) {
@@ -214,6 +226,16 @@ public class Query<T> {
     }
 
     return sql.toString();
+  }
+
+  private int getEffectiveLimit() {
+    if (limit != null) {
+      return limit;
+    }
+    if (unlimitedResults) {
+      return -1;
+    }
+    return DEFAULT_QUERY_LIMIT;
   }
 
   private void buildWhereClause(StringBuilder sql) {
@@ -472,17 +494,15 @@ public class Query<T> {
   }
 
   private String getActualColumnName(String fieldName) {
+    String columnName;
     if (metadata.fieldColumnNames().containsKey(fieldName)) {
-      return metadata.fieldColumnNames().get(fieldName);
+      columnName = metadata.fieldColumnNames().get(fieldName);
+    } else if (metadata.columnFields().containsKey(fieldName)) {
+      columnName = fieldName;
+    } else {
+      columnName = fieldName;
     }
-
-    for (String columnName : metadata.columnFields().keySet()) {
-      if (columnName.equals(fieldName)) {
-        return columnName;
-      }
-    }
-
-    return fieldName;
+    return SqlSanitizer.sanitizeColumnName(columnName);
   }
 
   public static <T> QueryBuilder<T> builder(FlexOrm orm, Class<T> entityClass,
@@ -506,7 +526,7 @@ public class Query<T> {
         if (useDistinct) {
           sql.append("DISTINCT ");
         }
-        sql.append("*) FROM ").append(metadata.tableName());
+        sql.append("*) FROM ").append(SqlSanitizer.sanitizeTableName(metadata.tableName()));
 
         if (!conditions.isEmpty()) {
           sql.append(" WHERE ");

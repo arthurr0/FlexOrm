@@ -9,6 +9,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import pl.minecodes.orm.FlexOrm;
 import pl.minecodes.orm.table.TableMetadata;
+import pl.minecodes.orm.util.SqlSanitizer;
 
 public class CascadeHandler {
 
@@ -107,12 +108,13 @@ public class CascadeHandler {
         return;
       }
 
-      String idColumn = metadata.fieldColumnNames().getOrDefault(
+      String idColumn = SqlSanitizer.sanitizeColumnName(metadata.fieldColumnNames().getOrDefault(
           metadata.idField().getName(),
           metadata.idField().getName()
-      );
+      ));
 
-      String sql = "DELETE FROM " + metadata.tableName() + " WHERE " + idColumn + " = ?";
+      String tableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
+      String sql = "DELETE FROM " + tableName + " WHERE " + idColumn + " = ?";
 
       try (PreparedStatement stmt = connection.prepareStatement(sql)) {
         stmt.setObject(1, id);
@@ -126,7 +128,10 @@ public class CascadeHandler {
   private void deleteFromJoinTable(String joinTable, String joinColumn, Object entityId,
       Connection connection) {
     try {
-      String sql = "DELETE FROM " + joinTable + " WHERE " + joinColumn + " = ?";
+      String sanitizedJoinTable = SqlSanitizer.sanitizeTableName(joinTable);
+      String sanitizedJoinColumn = SqlSanitizer.sanitizeColumnName(joinColumn);
+
+      String sql = "DELETE FROM " + sanitizedJoinTable + " WHERE " + sanitizedJoinColumn + " = ?";
       try (PreparedStatement stmt = connection.prepareStatement(sql)) {
         stmt.setObject(1, entityId);
         stmt.executeUpdate();
@@ -187,7 +192,11 @@ public class CascadeHandler {
   private void insertIntoJoinTable(String joinTable, String joinColumn, String inverseJoinColumn,
       Object entityId, Object relatedId, Connection connection) {
     try {
-      String sql = "INSERT INTO " + joinTable + " (" + joinColumn + ", " + inverseJoinColumn
+      String sanitizedJoinTable = SqlSanitizer.sanitizeTableName(joinTable);
+      String sanitizedJoinColumn = SqlSanitizer.sanitizeColumnName(joinColumn);
+      String sanitizedInverseJoinColumn = SqlSanitizer.sanitizeColumnName(inverseJoinColumn);
+
+      String sql = "INSERT INTO " + sanitizedJoinTable + " (" + sanitizedJoinColumn + ", " + sanitizedInverseJoinColumn
           + ") VALUES (?, ?)";
       try (PreparedStatement stmt = connection.prepareStatement(sql)) {
         stmt.setObject(1, entityId);

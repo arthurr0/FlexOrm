@@ -1,5 +1,6 @@
 package pl.minecodes.orm.relation;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -11,12 +12,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import pl.minecodes.orm.FlexOrm;
 import pl.minecodes.orm.annotation.FetchType;
 import pl.minecodes.orm.table.TableMetadata;
+import pl.minecodes.orm.util.SqlSanitizer;
 
 public class RelationLoader {
+
+  private static final Map<Class<?>, Constructor<?>> constructorCache = new ConcurrentHashMap<>();
 
   private final FlexOrm orm;
   private final Map<Class<?>, TableMetadata> metadataCache;
@@ -153,8 +158,12 @@ public class RelationLoader {
   private Object getFkValueFromEntity(Object entity, TableMetadata metadata, String fkColumn,
       Connection connection)
       throws Exception {
-    String sql = "SELECT " + fkColumn + " FROM " + metadata.tableName() + " WHERE "
-        + getIdColumnName(metadata) + " = ?";
+    String sanitizedFkColumn = SqlSanitizer.sanitizeColumnName(fkColumn);
+    String sanitizedTableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
+    String sanitizedIdColumn = SqlSanitizer.sanitizeColumnName(getIdColumnName(metadata));
+
+    String sql = "SELECT " + sanitizedFkColumn + " FROM " + sanitizedTableName + " WHERE "
+        + sanitizedIdColumn + " = ?";
 
     try (PreparedStatement stmt = connection.prepareStatement(sql)) {
       stmt.setObject(1, metadata.idField().get(entity));
@@ -170,8 +179,10 @@ public class RelationLoader {
   private Object findById(Class<?> entityClass, TableMetadata metadata, Object id,
       Connection connection)
       throws Exception {
-    String sql =
-        "SELECT * FROM " + metadata.tableName() + " WHERE " + getIdColumnName(metadata) + " = ?";
+    String sanitizedTableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
+    String sanitizedIdColumn = SqlSanitizer.sanitizeColumnName(getIdColumnName(metadata));
+
+    String sql = "SELECT * FROM " + sanitizedTableName + " WHERE " + sanitizedIdColumn + " = ?";
 
     try (PreparedStatement stmt = connection.prepareStatement(sql)) {
       stmt.setObject(1, id);
@@ -187,7 +198,10 @@ public class RelationLoader {
   private Object findByFk(Class<?> entityClass, TableMetadata metadata, String fkColumn,
       Object fkValue,
       Connection connection) throws Exception {
-    String sql = "SELECT * FROM " + metadata.tableName() + " WHERE " + fkColumn + " = ?";
+    String sanitizedTableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
+    String sanitizedFkColumn = SqlSanitizer.sanitizeColumnName(fkColumn);
+
+    String sql = "SELECT * FROM " + sanitizedTableName + " WHERE " + sanitizedFkColumn + " = ?";
 
     try (PreparedStatement stmt = connection.prepareStatement(sql)) {
       stmt.setObject(1, fkValue);
@@ -204,7 +218,10 @@ public class RelationLoader {
       Object fkValue,
       Connection connection) throws Exception {
     List<Object> results = new ArrayList<>();
-    String sql = "SELECT * FROM " + metadata.tableName() + " WHERE " + fkColumn + " = ?";
+    String sanitizedTableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
+    String sanitizedFkColumn = SqlSanitizer.sanitizeColumnName(fkColumn);
+
+    String sql = "SELECT * FROM " + sanitizedTableName + " WHERE " + sanitizedFkColumn + " = ?";
 
     try (PreparedStatement stmt = connection.prepareStatement(sql)) {
       stmt.setObject(1, fkValue);
@@ -223,10 +240,16 @@ public class RelationLoader {
       throws Exception {
     List<Object> results = new ArrayList<>();
 
-    String sql = "SELECT t.* FROM " + targetMetadata.tableName() + " t " +
-        "INNER JOIN " + joinTable + " j ON t." + getIdColumnName(targetMetadata) + " = j."
-        + inverseJoinColumn +
-        " WHERE j." + joinColumn + " = ?";
+    String sanitizedTargetTable = SqlSanitizer.sanitizeTableName(targetMetadata.tableName());
+    String sanitizedJoinTable = SqlSanitizer.sanitizeTableName(joinTable);
+    String sanitizedIdColumn = SqlSanitizer.sanitizeColumnName(getIdColumnName(targetMetadata));
+    String sanitizedInverseJoinColumn = SqlSanitizer.sanitizeColumnName(inverseJoinColumn);
+    String sanitizedJoinColumn = SqlSanitizer.sanitizeColumnName(joinColumn);
+
+    String sql = "SELECT t.* FROM " + sanitizedTargetTable + " t " +
+        "INNER JOIN " + sanitizedJoinTable + " j ON t." + sanitizedIdColumn + " = j."
+        + sanitizedInverseJoinColumn +
+        " WHERE j." + sanitizedJoinColumn + " = ?";
 
     try (PreparedStatement stmt = connection.prepareStatement(sql)) {
       stmt.setObject(1, entityId);
@@ -241,7 +264,7 @@ public class RelationLoader {
 
   private Object mapResultSetToEntity(ResultSet rs, Class<?> entityClass, TableMetadata metadata)
       throws Exception {
-    Object instance = entityClass.getDeclaredConstructor().newInstance();
+    Object instance = getCachedConstructor(entityClass).newInstance();
 
     for (var entry : metadata.columnFields().entrySet()) {
       String columnName = entry.getKey();
@@ -264,6 +287,19 @@ public class RelationLoader {
     }
 
     return instance;
+  }
+
+  @SuppressWarnings("unchecked")
+  private <E> Constructor<E> getCachedConstructor(Class<E> clazz) {
+    return (Constructor<E>) constructorCache.computeIfAbsent(clazz, cls -> {
+      try {
+        Constructor<?> constructor = cls.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        return constructor;
+      } catch (NoSuchMethodException e) {
+        throw new RuntimeException("No default constructor found for " + cls.getName(), e);
+      }
+    });
   }
 
   private String getIdColumnName(TableMetadata metadata) {

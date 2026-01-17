@@ -166,4 +166,11 @@ public class FlexOrm {
   public Connection<?> getConnection() {
     return connection;
   }
+
+  public void shutdown() {
+    if (this.connection != null) {
+      this.connection.close();
+      this.connection = null;
+    }
+  }
 }

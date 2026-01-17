@@ -10,9 +10,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import pl.minecodes.orm.FlexOrm;
+import pl.minecodes.orm.query.Query;
 import pl.minecodes.orm.relation.CascadeHandler;
 import pl.minecodes.orm.relation.RelationLoader;
 import pl.minecodes.orm.table.TableMetadata;
+import pl.minecodes.orm.util.SqlSanitizer;
 
 public abstract class RelationalEntityRepository<T, ID> extends BaseEntityRepository<T, ID> {
 
@@ -85,8 +87,9 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
 
   private boolean existsByIdInternal(Object id, TableMetadata metadata, Connection connection) {
     try {
-      String idColumnName = getColumnNameForField(metadata.idField(), metadata);
-      String sql = "SELECT 1 FROM " + metadata.tableName() + " WHERE " + idColumnName + " = ?";
+      String idColumnName = SqlSanitizer.sanitizeColumnName(getColumnNameForField(metadata.idField(), metadata));
+      String tableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
+      String sql = "SELECT 1 FROM " + tableName + " WHERE " + idColumnName + " = ?";
       try (PreparedStatement statement = connection.prepareStatement(sql)) {
         statement.setObject(1, id);
         try (ResultSet resultSet = statement.executeQuery()) {
@@ -212,8 +215,9 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
 
     try {
       Connection connection = getConnection();
-      String idColumnName = getColumnNameForField(metadata.idField(), metadata);
-      String sql = "SELECT 1 FROM " + metadata.tableName() + " WHERE " + idColumnName + " = ?";
+      String idColumnName = SqlSanitizer.sanitizeColumnName(getColumnNameForField(metadata.idField(), metadata));
+      String tableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
+      String sql = "SELECT 1 FROM " + tableName + " WHERE " + idColumnName + " = ?";
 
       try (PreparedStatement statement = connection.prepareStatement(sql)) {
         statement.setObject(1, id);
@@ -240,8 +244,9 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
       boolean autoClose = activeConnection == null;
 
       try {
+        String tableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
         StringBuilder sql = new StringBuilder();
-        sql.append("INSERT INTO ").append(metadata.tableName()).append(" (");
+        sql.append("INSERT INTO ").append(tableName).append(" (");
 
         List<Object> values = new ArrayList<>();
         List<String> columns = new ArrayList<>();
@@ -260,8 +265,9 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
               sql.append(", ");
               placeholders.append(", ");
             }
-            sql.append(entry.getKey());
-            columns.add(entry.getKey());
+            String columnName = SqlSanitizer.sanitizeColumnName(entry.getKey());
+            sql.append(columnName);
+            columns.add(columnName);
             placeholders.append("?");
             values.add(value);
           } catch (IllegalAccessException e) {
@@ -308,12 +314,13 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
       boolean autoClose = activeConnection == null;
 
       try {
+        String tableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
         StringBuilder sql = new StringBuilder();
-        sql.append("UPDATE ").append(metadata.tableName()).append(" SET ");
+        sql.append("UPDATE ").append(tableName).append(" SET ");
 
         List<Object> values = new ArrayList<>();
         Object idValue = null;
-        String idColumnName = getColumnNameForField(metadata.idField(), metadata);
+        String idColumnName = SqlSanitizer.sanitizeColumnName(getColumnNameForField(metadata.idField(), metadata));
 
         boolean first = true;
         for (var entry : metadata.columnFields().entrySet()) {
@@ -327,7 +334,8 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
             if (!first) {
               sql.append(", ");
             }
-            sql.append(entry.getKey()).append(" = ?");
+            String columnName = SqlSanitizer.sanitizeColumnName(entry.getKey());
+            sql.append(columnName).append(" = ?");
             values.add(value);
             first = false;
           } catch (IllegalAccessException e) {
@@ -360,8 +368,9 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
       boolean autoClose = activeConnection == null;
 
       try {
-        String idColumnName = getColumnNameForField(metadata.idField(), metadata);
-        String sql = "DELETE FROM " + metadata.tableName() + " WHERE " + idColumnName + " = ?";
+        String tableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
+        String idColumnName = SqlSanitizer.sanitizeColumnName(getColumnNameForField(metadata.idField(), metadata));
+        String sql = "DELETE FROM " + tableName + " WHERE " + idColumnName + " = ?";
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
           statement.setObject(1, id);
@@ -383,15 +392,16 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
       boolean autoClose = activeConnection == null;
 
       try {
-        String idColumnName = getColumnNameForField(metadata.idField(), metadata);
-        String sql = "SELECT * FROM " + metadata.tableName() + " WHERE " + idColumnName + " = ?";
+        String tableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
+        String idColumnName = SqlSanitizer.sanitizeColumnName(getColumnNameForField(metadata.idField(), metadata));
+        String sql = "SELECT * FROM " + tableName + " WHERE " + idColumnName + " = ?";
 
         try (PreparedStatement statement = connection.prepareStatement(sql)) {
           statement.setObject(1, id);
 
           try (ResultSet resultSet = statement.executeQuery()) {
             if (resultSet.next()) {
-              T instance = entityClass.getDeclaredConstructor().newInstance();
+              T instance = getCachedConstructor(entityClass).newInstance();
 
               for (var entry : metadata.columnFields().entrySet()) {
                 String columnName = entry.getKey();
@@ -434,13 +444,14 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
       boolean autoClose = activeConnection == null;
 
       try {
-        String sql = "SELECT * FROM " + metadata.tableName();
+        String tableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
+        String sql = "SELECT * FROM " + tableName + " LIMIT " + Query.DEFAULT_QUERY_LIMIT;
 
         try (PreparedStatement statement = connection.prepareStatement(sql);
             ResultSet resultSet = statement.executeQuery()) {
 
           while (resultSet.next()) {
-            T instance = entityClass.getDeclaredConstructor().newInstance();
+            T instance = getCachedConstructor(entityClass).newInstance();
 
             for (var entry : metadata.columnFields().entrySet()) {
               try {
@@ -477,8 +488,9 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
   private void insertIntoDatabaseInternal(Object entity, TableMetadata metadata,
       Connection connection) {
     try {
+      String tableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
       StringBuilder sql = new StringBuilder();
-      sql.append("INSERT INTO ").append(metadata.tableName()).append(" (");
+      sql.append("INSERT INTO ").append(tableName).append(" (");
 
       List<Object> values = new ArrayList<>();
       StringBuilder placeholders = new StringBuilder();
@@ -490,7 +502,8 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
             sql.append(", ");
             placeholders.append(", ");
           }
-          sql.append(entry.getKey());
+          String columnName = SqlSanitizer.sanitizeColumnName(entry.getKey());
+          sql.append(columnName);
           placeholders.append("?");
           values.add(value);
         } catch (IllegalAccessException e) {
@@ -514,12 +527,13 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
   private void updateInDatabaseInternal(Object entity, TableMetadata metadata,
       Connection connection) {
     try {
+      String tableName = SqlSanitizer.sanitizeTableName(metadata.tableName());
       StringBuilder sql = new StringBuilder();
-      sql.append("UPDATE ").append(metadata.tableName()).append(" SET ");
+      sql.append("UPDATE ").append(tableName).append(" SET ");
 
       List<Object> values = new ArrayList<>();
       Object idValue = null;
-      String idColumnName = getColumnNameForField(metadata.idField(), metadata);
+      String idColumnName = SqlSanitizer.sanitizeColumnName(getColumnNameForField(metadata.idField(), metadata));
 
       boolean first = true;
       for (var entry : metadata.columnFields().entrySet()) {
@@ -533,7 +547,8 @@ public abstract class RelationalEntityRepository<T, ID> extends BaseEntityReposi
           if (!first) {
             sql.append(", ");
           }
-          sql.append(entry.getKey()).append(" = ?");
+          String columnName = SqlSanitizer.sanitizeColumnName(entry.getKey());
+          sql.append(columnName).append(" = ?");
           values.add(value);
           first = false;
         } catch (IllegalAccessException e) {
