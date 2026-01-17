@@ -18,15 +18,46 @@ FlexOrm is a flexible and efficient ORM library for Java, enabling simple integr
 
 ### Maven
 
+Add the Minecodes repository to your `pom.xml`:
+
+```xml
+<repositories>
+  <repository>
+    <id>minecodes</id>
+    <url>https://maven.minecodes.pl/releases</url>
+  </repository>
+</repositories>
+```
+
+Then add the dependency:
+
 ```xml
 <dependency>
   <groupId>pl.minecodes.orm</groupId>
   <artifactId>FlexOrm</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>2026.01.17.1</version>
 </dependency>
 ```
 
+### Gradle
+
+Add the Minecodes repository to your `build.gradle`:
+
+```groovy
+repositories {
+    maven { url 'https://maven.minecodes.pl/releases' }
+}
+```
+
+Then add the dependency:
+
+```groovy
+implementation 'pl.minecodes.orm:FlexOrm:2026.01.17.1'
+```
+
 ### Database dependencies
+
+FlexOrm uses `provided` scope for database drivers - you need to add the driver for the database you want to use:
 
 #### MySQL
 ```xml

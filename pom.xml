@@ -6,7 +6,7 @@
 
   <groupId>pl.minecodes.orm</groupId>
   <artifactId>FlexOrm</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>2026.01.17.1</version>
   <packaging>jar</packaging>
 
   <name>FlexOrm</name>
@@ -43,51 +43,63 @@
     <testcontainers.version>1.19.1</testcontainers.version>
   </properties>
 
+  <distributionManagement>
+    <repository>
+      <id>minecodes-repository-releases</id>
+      <url>https://maven.minecodes.pl/releases</url>
+    </repository>
+    <snapshotRepository>
+      <id>minecodes-repository-releases</id>
+      <url>https://maven.minecodes.pl/snapshots</url>
+    </snapshotRepository>
+  </distributionManagement>
+
   <dependencies>
-    <dependency>
-      <groupId>com.google.code.gson</groupId>
-      <artifactId>gson</artifactId>
-      <version>2.13.0</version>
-<!--
-      <scope>provided</scope>
--->
-    </dependency>
-    <dependency>
-      <groupId>mysql</groupId>
-      <artifactId>mysql-connector-java</artifactId>
-      <version>8.0.33</version>
-<!--
-      <scope>provided</scope>
--->
-    </dependency>
     <dependency>
       <groupId>com.zaxxer</groupId>
       <artifactId>HikariCP</artifactId>
       <version>6.2.1</version>
-<!--
-      <scope>provided</scope>
--->
     </dependency>
+
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>2.13.0</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>mysql</groupId>
+      <artifactId>mysql-connector-java</artifactId>
+      <version>8.0.33</version>
+      <scope>provided</scope>
+    </dependency>
+
     <dependency>
       <groupId>org.mongodb</groupId>
       <artifactId>mongodb-driver-sync</artifactId>
       <version>5.2.1</version>
-<!--
       <scope>provided</scope>
--->
     </dependency>
+
     <dependency>
       <groupId>org.xerial</groupId>
       <artifactId>sqlite-jdbc</artifactId>
       <version>3.46.0.0</version>
-<!--
       <scope>provided</scope>
--->
     </dependency>
+
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>2.0.9</version>
+    </dependency>
+
     <dependency>
       <groupId>ch.qos.logback</groupId>
       <artifactId>logback-classic</artifactId>
-      <version>1.2.11</version>
+      <version>1.4.14</version>
+      <scope>provided</scope>
     </dependency>
 
     <dependency>
@@ -115,7 +127,6 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- Testcontainers -->
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers</artifactId>
@@ -145,8 +156,8 @@
   <build>
     <plugins>
       <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
         <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
         <version>3.13.0</version>
         <configuration>
           <source>17</source>
@@ -155,19 +166,15 @@
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-shade-plugin</artifactId>
-        <version>3.6.0</version>
-        <executions>
-          <execution>
-            <configuration>
-              <createDependencyReducedPom>false</createDependencyReducedPom>
-            </configuration>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <phase>package</phase>
-          </execution>
-        </executions>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.3.0</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+            </manifest>
+          </archive>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -205,39 +212,4 @@
       </plugin>
     </plugins>
   </build>
-
-  <profiles>
-    <profile>
-      <id>release</id>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-gpg-plugin</artifactId>
-            <version>3.1.0</version>
-            <executions>
-              <execution>
-                <id>sign-artifacts</id>
-                <phase>verify</phase>
-                <goals>
-                  <goal>sign</goal>
-                </goals>
-              </execution>
-            </executions>
-          </plugin>
-          <plugin>
-            <groupId>org.sonatype.plugins</groupId>
-            <artifactId>nexus-staging-maven-plugin</artifactId>
-            <version>1.6.13</version>
-            <extensions>true</extensions>
-            <configuration>
-              <serverId>ossrh</serverId>
-              <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
-              <autoReleaseAfterClose>true</autoReleaseAfterClose>
-            </configuration>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-  </profiles>
 </project>
